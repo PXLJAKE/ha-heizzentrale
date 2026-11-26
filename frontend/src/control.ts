@@ -45,12 +45,28 @@ export interface RoomPlan {
   applied: boolean;
 }
 
+/** Flow temperature by demand: one number of the heat source is nudged. */
+export interface Flow {
+  entity: string | null;
+  min: number;
+  max: number;
+  step: number;
+  apply: boolean;
+  value?: number | null;
+  target?: number | null;
+  reason?: string;
+  rooms?: string[];
+  base?: number | null;
+  history?: { time: string; from: number; to: number; reason: string }[];
+}
+
 export interface Control {
   enabled: boolean;
   schedules: Schedule[];
   rules: AbsenceRule[];
   stoves?: Stove[];
   window?: { enabled: boolean; delay_min: number };
+  flow?: Flow;
   /** True while strands and pump groups are switched for real. */
   switching?: boolean;
   /** Strands Heizzentrale closed and pump groups it switched off. */
@@ -143,6 +159,7 @@ export class HeizzentraleControl extends LitElement {
     plant: { attribute: false },
     control: { attribute: false },
     t: { attribute: false },
+    language: { attribute: false },
     _schedule: { state: true },
     _rule: { state: true },
     _stove: { state: true },
@@ -154,6 +171,7 @@ export class HeizzentraleControl extends LitElement {
   plant?: PlantLike;
   control?: Control;
   t: Translate = (key) => key;
+  language?: string;
   private _schedule?: Schedule;
   private _rule?: AbsenceRule;
   private _stove?: Stove;
@@ -797,6 +815,138 @@ export class HeizzentraleControl extends LitElement {
     const away = this._presets().includes("away") ? "preset:away" : "off";
     const stoves = control.stoves ?? [];
     const windowRule = control.window ?? { enabled: true, delay_min: 2 };
+    return html`${this._renderMain(control, away, stoves)}${this._renderFlow(control)}
+    ${this._renderTail(control, windowRule)}`;
+  }
+
+  private _renderFlow(control: Control) {
+    const t = this.t;
+    const flow: Flow = control.flow ?? {
+      entity: null,
+      min: 19,
+      max: 22,
+      step: 0.5,
+      apply: false,
+    };
+    const settings = () => ({
+      entity: flow.entity,
+      min: flow.min,
+      max: flow.max,
+      step: flow.step,
+      apply: flow.apply,
+    });
+    const numbers = Object.keys(this.hass?.states ?? {})
+      .filter((id) => id.startsWith("number.") || id.startsWith("input_number."))
+      .filter((id) => {
+        const unit = this.hass!.states[id].attributes.unit_of_measurement;
+        return unit === "°C" || unit === "K" || unit === "°F" || id === flow.entity;
+      })
+      .sort((a, b) => this._entityName(a).localeCompare(this._entityName(b)));
+    const unit = flow.entity
+      ? (this.hass?.states[flow.entity]?.attributes.unit_of_measurement ?? "")
+      : "";
+    const show = (value?: number | null) =>
+      value === null || value === undefined
+        ? "?"
+        : `${value.toLocaleString(this.language || undefined, { maximumFractionDigits: 1 })} ${unit}`.trim();
+    const field = (key: "min" | "max" | "step", low: number, high: number) => html`
+      <label class="field inline">
+        <span class="label">${t(`flow_${key}` as any)}</span>
+        <input
+          class="short"
+          type="number"
+          min=${low}
+          max=${high}
+          step="0.1"
+          .value=${String(flow[key])}
+          @change=${(event: Event) => {
+            const value = Number((event.target as HTMLInputElement).value);
+            if (!Number.isFinite(value)) return;
+            const next = { ...settings(), [key]: Math.min(high, Math.max(low, value)) };
+            if (next.min > next.max) {
+              if (key === "min") next.max = next.min;
+              else next.min = next.max;
+            }
+            void this._save({ flow: next });
+          }}
+        />
+      </label>
+    `;
+    const reason = flow.reason ?? "unknown";
+    return html`
+      <section class="set">
+        <h3>${t("set_flow")}</h3>
+        <p class="hint first">${t("flow_hint")}</p>
+        <div class="label">${t("flow_entity")}</div>
+        <select
+          aria-label=${t("flow_entity")}
+          ?disabled=${this._busy}
+          @change=${(event: Event) =>
+            this._save({
+              flow: {
+                ...settings(),
+                entity: (event.target as HTMLSelectElement).value || null,
+                apply: false,
+              },
+            })}
+        >
+          <option value="" ?selected=${!flow.entity}>${t("flow_none")}</option>
+          ${numbers.map(
+            (entity) =>
+              html`<option value=${entity} ?selected=${flow.entity === entity}>
+                ${this._entityName(entity)}
+              </option>`,
+          )}
+        </select>
+        ${flow.entity
+          ? html`
+              ${field("min", -50, 100)} ${field("max", -50, 100)} ${field("step", 0.1, 5)}
+              <div class="status">
+                <p>
+                  ${t("flow_now", { value: show(flow.value) })}
+                  ${t(`flow_r_${reason}` as any, {
+                    rooms: (flow.rooms ?? []).join(", "),
+                    target: show(flow.target),
+                  })}
+                </p>
+                ${(flow.history ?? [])
+                  .slice(-3)
+                  .reverse()
+                  .map(
+                    (item) =>
+                      html`<p class="row-detail">
+                        ${new Date(item.time).toLocaleString(this.language || undefined, {
+                          day: "2-digit",
+                          month: "2-digit",
+                          hour: "2-digit",
+                          minute: "2-digit",
+                        })}:
+                        ${show(item.from)} → ${show(item.to)}
+                      </p>`,
+                  )}
+              </div>
+              <div class="choices">
+                ${[false, true].map(
+                  (apply) =>
+                    html`<button
+                      class="choice ${flow.apply === apply ? "on" : ""}"
+                      aria-pressed=${flow.apply === apply}
+                      ?disabled=${this._busy}
+                      @click=${() => this._save({ flow: { ...settings(), apply } })}
+                    >
+                      ${t(apply ? "apply_on" : "apply_off")}
+                    </button>`,
+                )}
+              </div>
+              <p class="hint">${t(flow.apply ? "flow_apply_on" : "flow_apply_off")}</p>
+            `
+          : nothing}
+      </section>
+    `;
+  }
+
+  private _renderMain(control: Control, away: string, stoves: Stove[]) {
+    const t = this.t;
     return html`
       <section class="set">
         <h3>${t("set_schedules")}</h3>
@@ -886,6 +1036,12 @@ export class HeizzentraleControl extends LitElement {
               + ${t("add_stove")}
             </button>`}
       </section>
+    `;
+  }
+
+  private _renderTail(control: Control, windowRule: { enabled: boolean; delay_min: number }) {
+    const t = this.t;
+    return html`
       <section class="set">
         <h3>${t("set_window")}</h3>
         <div class="choices">
@@ -1028,6 +1184,11 @@ export class HeizzentraleControl extends LitElement {
     }
     .room-line .point-line {
       flex: 0 1 260px;
+    }
+    .status p {
+      margin: 8px 0;
+      font-size: 14px;
+      line-height: 1.45;
     }
     .hint {
       margin: 8px 0 0;
