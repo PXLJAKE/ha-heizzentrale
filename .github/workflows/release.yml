@@ -1,10 +1,13 @@
 name: Release
 
-# Pushing a tag like v0.2.0 or v0.2.0-beta.1 creates the GitHub release.
-# Tags with a suffix (-beta.1, -rc.1) become pre-releases.
+# A release is created when the version in manifest.json changes on main.
+# Versions with a suffix (0.2.0-beta.1, 0.2.0-rc.1) become pre-releases.
+# The workflow creates the tag v<version> itself; nothing is released twice.
 on:
   push:
-    tags: ["v*"]
+    branches: [main]
+    paths: ["custom_components/heizzentrale/manifest.json"]
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -17,26 +20,33 @@ jobs:
       contents: write
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - name: Tag must match the manifest version
-        env:
-          TAG: ${{ github.ref_name }}
+      - name: Read version
+        id: version
         run: |
           version=$(python3 -c "import json; print(json.load(open('custom_components/heizzentrale/manifest.json'))['version'])")
-          base="${TAG#v}"
-          base="${base%%-*}"
-          if [ "$base" != "$version" ]; then
-            echo "Tag $TAG does not match manifest version $version" >&2
-            exit 1
+          echo "tag=v${version}" >> "$GITHUB_OUTPUT"
+      - name: Skip if this version is already released
+        id: exists
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.version.outputs.tag }}
+        run: |
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            echo "Release $TAG exists, nothing to do."
+            echo "skip=true" >> "$GITHUB_OUTPUT"
           fi
       - name: Build ZIP
+        if: steps.exists.outputs.skip != 'true'
         run: |
           cd custom_components/heizzentrale
           zip -r "$GITHUB_WORKSPACE/heizzentrale.zip" . -x '*/__pycache__/*'
       - name: Create release
+        if: steps.exists.outputs.skip != 'true'
         env:
           GH_TOKEN: ${{ github.token }}
-          TAG: ${{ github.ref_name }}
+          TAG: ${{ steps.version.outputs.tag }}
         run: |
           flags=""
           case "$TAG" in *-*) flags="--prerelease" ;; esac
-          gh release create "$TAG" heizzentrale.zip --title "$TAG" --generate-notes $flags
+          gh release create "$TAG" heizzentrale.zip --target "$GITHUB_SHA" \
+            --title "$TAG" --generate-notes $flags
