@@ -5,12 +5,12 @@ from __future__ import annotations
 from homeassistant.components.select import SelectEntity
 from homeassistant.const import EntityCategory
 from homeassistant.core import HomeAssistant
-from homeassistant.helpers.device_registry import DeviceEntryType, DeviceInfo
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 from homeassistant.helpers.restore_state import RestoreEntity
 
 from . import HeizzentraleConfigEntry
-from .const import DEFAULT_MODE, DOMAIN, OperatingMode
+from .const import DEFAULT_MODE, OperatingMode
+from .entity import plant_device_info
 
 
 async def async_setup_entry(
@@ -34,12 +34,7 @@ class OperatingModeSelect(SelectEntity, RestoreEntity):
         """Initialize the select."""
         self._entry = entry
         self._attr_unique_id = f"{entry.entry_id}_operating_mode"
-        self._attr_device_info = DeviceInfo(
-            identifiers={(DOMAIN, entry.entry_id)},
-            name=entry.title,
-            manufacturer="Heizzentrale",
-            entry_type=DeviceEntryType.SERVICE,
-        )
+        self._attr_device_info = plant_device_info(entry.entry_id, entry.title)
 
     @property
     def current_option(self) -> str:

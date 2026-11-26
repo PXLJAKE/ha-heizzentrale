@@ -92,3 +92,14 @@ async def test_diagnostics_redacts_name(
     diag = await async_get_config_entry_diagnostics(hass, mock_entry)
     assert "Heizung" not in str(diag)
     assert diag["mode"] == "observe"
+
+
+async def test_card_is_served(hass: HomeAssistant, hass_client) -> None:
+    """The bundled card is reachable for the frontend."""
+    from homeassistant.setup import async_setup_component
+
+    assert await async_setup_component(hass, "heizzentrale", {})
+    client = await hass_client()
+    response = await client.get("/heizzentrale_static/heizzentrale-card.js")
+    assert response.status == 200
+    assert "heizzentrale-house-card" in await response.text()

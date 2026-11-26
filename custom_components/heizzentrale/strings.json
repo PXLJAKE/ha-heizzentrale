@@ -37,6 +37,240 @@
           "observe": "Observe"
         }
       }
+    },
+    "sensor": {
+      "spread": {
+        "name": "Spread"
+      },
+      "buffer_mean": {
+        "name": "Mean temperature"
+      }
+    },
+    "binary_sensor": {
+      "circuit_open": {
+        "name": "Open"
+      }
+    }
+  },
+  "config_subentries": {
+    "heat_source": {
+      "initiate_flow": {
+        "user": "Add heat source",
+        "reconfigure": "Change: Heat source"
+      },
+      "entry_type": "Heat source",
+      "step": {
+        "user": {
+          "title": "Heat source",
+          "description": "Boiler, heat pump or any other device that produces heat. All sensors are optional.",
+          "data": {
+            "name": "Name",
+            "kind": "Type",
+            "boiler_temperature_entity": "Boiler temperature",
+            "flow_entity": "Flow temperature",
+            "status_entity": "Status"
+          },
+          "data_description": {
+            "name": "For example \"Pellet boiler\".",
+            "kind": "Only used for the picture and for later evaluation.",
+            "boiler_temperature_entity": "Temperature inside the heat source.",
+            "flow_entity": "Temperature of the water leaving towards the heating.",
+            "status_entity": "Any entity that shows whether the heat source is running."
+          }
+        },
+        "reconfigure": {
+          "title": "Heat source",
+          "description": "Boiler, heat pump or any other device that produces heat. All sensors are optional.",
+          "data": {
+            "name": "Name",
+            "kind": "Type",
+            "boiler_temperature_entity": "Boiler temperature",
+            "flow_entity": "Flow temperature",
+            "status_entity": "Status"
+          },
+          "data_description": {
+            "name": "For example \"Pellet boiler\".",
+            "kind": "Only used for the picture and for later evaluation.",
+            "boiler_temperature_entity": "Temperature inside the heat source.",
+            "flow_entity": "Temperature of the water leaving towards the heating.",
+            "status_entity": "Any entity that shows whether the heat source is running."
+          }
+        }
+      },
+      "abort": {
+        "reconfigure_successful": "Saved."
+      }
+    },
+    "buffer": {
+      "initiate_flow": {
+        "user": "Add buffer tank",
+        "reconfigure": "Change: Buffer tank"
+      },
+      "entry_type": "Buffer tank",
+      "step": {
+        "user": {
+          "title": "Buffer tank",
+          "description": "A tank that stores hot water. Pick its temperature sensors from top to bottom.",
+          "data": {
+            "name": "Name",
+            "sensor_entities": "Temperature sensors, top first",
+            "volume": "Volume"
+          },
+          "data_description": {
+            "name": "For example \"Buffer\".",
+            "sensor_entities": "The order you pick them in is the order shown in the picture: the first one is the top of the tank.",
+            "volume": "Optional. Used later to estimate the stored energy."
+          }
+        },
+        "reconfigure": {
+          "title": "Buffer tank",
+          "description": "A tank that stores hot water. Pick its temperature sensors from top to bottom.",
+          "data": {
+            "name": "Name",
+            "sensor_entities": "Temperature sensors, top first",
+            "volume": "Volume"
+          },
+          "data_description": {
+            "name": "For example \"Buffer\".",
+            "sensor_entities": "The order you pick them in is the order shown in the picture: the first one is the top of the tank.",
+            "volume": "Optional. Used later to estimate the stored energy."
+          }
+        }
+      },
+      "abort": {
+        "reconfigure_successful": "Saved."
+      }
+    },
+    "circuit": {
+      "initiate_flow": {
+        "user": "Add circuit",
+        "reconfigure": "Change: Heating circuit"
+      },
+      "entry_type": "Heating circuit",
+      "step": {
+        "user": {
+          "title": "Heating circuit",
+          "description": "A heating circuit or one branch of a manifold, for example one floor. With flow and return sensors you get the spread.",
+          "data": {
+            "name": "Name",
+            "system_type": "System",
+            "flow_entity": "Flow temperature",
+            "return_entity": "Return temperature",
+            "valve_entity": "Actuator",
+            "valve_type": "Actuator without power is",
+            "power_entity": "Actuator power"
+          },
+          "data_description": {
+            "name": "For example \"Ground floor\".",
+            "system_type": "One-pipe: radiators in a row on one pipe. Two-pipe: every radiator has its own flow and return. If you are not sure, keep two-pipe.",
+            "flow_entity": "Sensor on the pipe going to the radiators.",
+            "return_entity": "Sensor on the pipe coming back.",
+            "valve_entity": "Switch or valve that opens and closes this circuit. Heizzentrale only reads it for now.",
+            "valve_type": "Printed on the actuator: NC means closed without power, NO means open without power.",
+            "power_entity": "Optional. Shows whether the actuator really draws power."
+          }
+        },
+        "reconfigure": {
+          "title": "Heating circuit",
+          "description": "A heating circuit or one branch of a manifold, for example one floor. With flow and return sensors you get the spread.",
+          "data": {
+            "name": "Name",
+            "system_type": "System",
+            "flow_entity": "Flow temperature",
+            "return_entity": "Return temperature",
+            "valve_entity": "Actuator",
+            "valve_type": "Actuator without power is",
+            "power_entity": "Actuator power"
+          },
+          "data_description": {
+            "name": "For example \"Ground floor\".",
+            "system_type": "One-pipe: radiators in a row on one pipe. Two-pipe: every radiator has its own flow and return. If you are not sure, keep two-pipe.",
+            "flow_entity": "Sensor on the pipe going to the radiators.",
+            "return_entity": "Sensor on the pipe coming back.",
+            "valve_entity": "Switch or valve that opens and closes this circuit. Heizzentrale only reads it for now.",
+            "valve_type": "Printed on the actuator: NC means closed without power, NO means open without power.",
+            "power_entity": "Optional. Shows whether the actuator really draws power."
+          }
+        }
+      },
+      "abort": {
+        "reconfigure_successful": "Saved."
+      }
+    },
+    "room": {
+      "initiate_flow": {
+        "user": "Add room",
+        "reconfigure": "Change: Room"
+      },
+      "entry_type": "Room",
+      "step": {
+        "user": {
+          "title": "Room",
+          "description": "A room with a thermostat. Works with Better Thermostat, Versatile Thermostat and any other climate entity.",
+          "data": {
+            "name": "Name",
+            "climate_entity": "Thermostat",
+            "circuit": "Circuit",
+            "floor": "Floor",
+            "window_entity": "Window contact"
+          },
+          "data_description": {
+            "name": "For example \"Living room\".",
+            "climate_entity": "The climate entity that controls this room.",
+            "circuit": "The circuit that supplies the radiators of this room. A room can be on another floor than its circuit.",
+            "floor": "Decides in which row of the house view the room appears.",
+            "window_entity": "Optional. Shown in the house view."
+          }
+        },
+        "reconfigure": {
+          "title": "Room",
+          "description": "A room with a thermostat. Works with Better Thermostat, Versatile Thermostat and any other climate entity.",
+          "data": {
+            "name": "Name",
+            "climate_entity": "Thermostat",
+            "circuit": "Circuit",
+            "floor": "Floor",
+            "window_entity": "Window contact"
+          },
+          "data_description": {
+            "name": "For example \"Living room\".",
+            "climate_entity": "The climate entity that controls this room.",
+            "circuit": "The circuit that supplies the radiators of this room. A room can be on another floor than its circuit.",
+            "floor": "Decides in which row of the house view the room appears.",
+            "window_entity": "Optional. Shown in the house view."
+          }
+        }
+      },
+      "abort": {
+        "reconfigure_successful": "Saved."
+      }
+    }
+  },
+  "selector": {
+    "heat_source_kind": {
+      "options": {
+        "pellet": "Pellet boiler",
+        "wood": "Wood boiler",
+        "gas": "Gas boiler",
+        "oil": "Oil boiler",
+        "heat_pump": "Heat pump",
+        "district": "District heating",
+        "other": "Other"
+      }
+    },
+    "system_type": {
+      "options": {
+        "two_pipe": "Two-pipe radiators",
+        "one_pipe": "One-pipe radiators",
+        "underfloor": "Underfloor heating",
+        "other": "Other"
+      }
+    },
+    "valve_type": {
+      "options": {
+        "nc": "closed (NC)",
+        "no": "open (NO)"
+      }
     }
   }
 }
