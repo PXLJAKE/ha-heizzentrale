@@ -25,6 +25,7 @@ SOURCE_SCHEDULE = "schedule"
 SOURCE_ABSENCE = "absence"
 SOURCE_STOVE = "stove"
 SOURCE_WINDOW = "window"
+SOURCE_PREHEAT = "preheat"
 
 # A stove counts as out again once it is this much cooler than its threshold.
 STOVE_HYSTERESIS = 5.0
@@ -60,6 +61,26 @@ def action_at(
             age = (now - (day * MINUTES_PER_DAY + start)) % MINUTES_PER_WEEK
             if best_age is None or age < best_age:
                 best, best_age = point["action"], age
+    return best
+
+
+def next_point(
+    points: Iterable[Mapping[str, Any]], weekday: int, minute: int
+) -> tuple[str, int, int] | None:
+    """The switch point that comes next.
+
+    Returns its action, the minutes until it and its minute of the week, or
+    None without points. A point that starts right now is not "next".
+    """
+    now = weekday * MINUTES_PER_DAY + minute
+    best: tuple[str, int, int] | None = None
+    for point in points:
+        start = parse_time(point["time"])
+        for day in point["days"]:
+            at = day * MINUTES_PER_DAY + start
+            wait = (at - now) % MINUTES_PER_WEEK
+            if wait and (best is None or wait < best[1]):
+                best = (point["action"], wait, at)
     return best
 
 
@@ -127,6 +148,18 @@ def _targets(item: Mapping[str, Any], room_id: str, floor_id: str | None) -> int
     return 0
 
 
+def schedule_for_room(
+    room_id: str, floor_id: str | None, schedules: Iterable[Mapping[str, Any]]
+) -> Mapping[str, Any] | None:
+    """The schedule of a room; one for the room wins over one for its floor."""
+    chosen: Mapping[str, Any] | None = None
+    rank = 0
+    for schedule in schedules:
+        if (found := _targets(schedule, room_id, floor_id)) > rank:
+            chosen, rank = schedule, found
+    return chosen
+
+
 def desired_for_room(
     room_id: str,
     floor_id: str | None,
@@ -152,11 +185,7 @@ def desired_for_room(
         if action := stove.get("actions", {}).get(room_id):
             return Desired(action, SOURCE_STOVE, stove.get("name", ""))
 
-    chosen: Mapping[str, Any] | None = None
-    rank = 0
-    for schedule in schedules:
-        if (found := _targets(schedule, room_id, floor_id)) > rank:
-            chosen, rank = schedule, found
+    chosen = schedule_for_room(room_id, floor_id, schedules)
     if chosen is None:
         return None
     action = action_at(chosen.get("points", ()), weekday, minute)

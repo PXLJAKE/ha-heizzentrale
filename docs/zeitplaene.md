@@ -57,3 +57,29 @@ Stoßlüften unter der Wartezeit ändert nichts.
   schaltest die Regel ganz ab.
 - Soll ein einzelner Raum nicht reagieren, nimm in seinen Einstellungen den
   Fensterkontakt heraus.
+
+## Rechtzeitig vorheizen
+
+Normalerweise stellt ein Schaltpunkt das Thermostat genau zur eingestellten
+Uhrzeit um, und der Raum ist erst später warm. Mit **Einstellungen,
+Rechtzeitig vorheizen, „Früher starten“** bedeutet die Uhrzeit: Dann soll
+der Raum warm sein.
+
+- Heizzentrale **misst**, wie schnell jeder Raum warm wird, immer wenn er
+  mindestens 20 Minuten heizt und dabei mindestens 0,3 Grad wärmer wird.
+  Neue Messungen fließen zu 30 Prozent in den gemerkten Wert ein.
+- Aus dem Abstand zur Solltemperatur und dieser Geschwindigkeit rechnet sie
+  aus, wie viele Minuten früher sie umstellen muss. Beispiel: 3 Grad fehlen,
+  der Raum schafft 2 Grad pro Stunde, also 90 Minuten früher.
+- Sie startet **höchstens** so viel früher, wie du einstellst (Standard:
+  120 Minuten).
+- Vorgeheizt wird nur in Richtung wärmer. Absenken beginnt immer genau am
+  Schaltpunkt.
+- Ein Raum **ohne Messwert** wird nie vorgeheizt. In den Einstellungen
+  steht, welche Räume schon gemessen sind.
+- Abwesenheit, ein brennender Ofen und ein offenes Fenster gehen vor.
+
+!!! note "Heizzeiten am Kessel"
+    Vorheizen bringt nur etwas, wenn dein Wärmeerzeuger zu dieser Zeit auch
+    Wärme liefert. Liegt der Start vor der Heizzeit, die am Kessel
+    eingestellt ist, stelle die Heizzeit dort entsprechend früher.
