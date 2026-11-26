@@ -332,6 +332,7 @@ class HeizzentraleHouseCard extends LitElement {
           bottom: r.bottom - origin.top,
           center: (r.left + r.right) / 2 - origin.left,
           left: r.left - origin.left,
+          right: r.right - origin.left,
         };
       };
       const rows = <T extends { bottom: number }>(items: T[]) => {
@@ -343,35 +344,105 @@ class HeizzentraleHouseCard extends LitElement {
         return [...map.entries()].sort((a, b) => a[0] - b[0]).map((entry) => entry[1]);
       };
 
-      // Supply line: heat source, buffer and circuits hang on one line.
-      const parts = [...house.querySelectorAll("[data-part]")].map(box);
-      const anyOpen = plant.circuits.some((c) => this._circuitOpen(c) !== false);
+      // The plant room reads as a chain: heat source, buffer, pump group,
+      // then a manifold from each pump group to its circuits. Whatever is
+      // missing is skipped, so a boiler without buffer feeds the pump group.
       const hot = "var(--hz-hot)";
-      let previous: number | undefined;
-      for (const row of rows(parts)) {
-        const y = row[0].bottom + 8;
-        const first = row[0];
-        const last = row[row.length - 1];
-        if (previous !== undefined) {
-          pipes.push({ d: roundedPath([[first.center, previous], [first.center, y]]), color: hot, active: anyOpen });
-        }
-        if (row.length > 1) {
+      const tile = (kind: string, id: string) => {
+        const element = house.querySelector(`[data-part="${kind}:${id}"]`);
+        return element ? box(element) : undefined;
+      };
+      type Tile = NonNullable<ReturnType<typeof tile>>;
+      const present = (items: (Tile | undefined)[]) => items.filter((t): t is Tile => !!t);
+      const isOpen = (circuit: Circuit) => this._circuitOpen(circuit) !== false;
+      const anyOpen = plant.circuits.some(isOpen);
+
+      /** Join two tiles: side by side in a row, or down through the row gap. */
+      const link = (from: Tile, to: Tile, active: boolean) => {
+        if (Math.abs(from.top - to.top) < 4 && to.left >= from.right) {
+          const y = (from.top + from.bottom) / 2;
+          pipes.push({ d: roundedPath([[from.right - 4, y], [to.left + 4, y]]), color: hot, active });
+        } else {
+          const y = from.bottom + 8;
           pipes.push({
             d: roundedPath([
-              [first.center, first.bottom - 6],
-              [first.center, y],
-              [last.center, y],
-              [last.center, last.bottom - 6],
+              [from.center, from.bottom - 6],
+              [from.center, y],
+              [to.center, y],
+              [to.center, to.top + 6],
             ]),
             color: hot,
-            active: anyOpen,
+            active,
           });
         }
-        for (const part of row.slice(1, -1)) {
-          pipes.push({ d: roundedPath([[part.center, y], [part.center, part.bottom - 6]]), color: hot, active: anyOpen });
+      };
+
+      /** One feeding tile, a line below it and a stub up into each circuit. */
+      const manifold = (feeder: Tile, circuits: Circuit[], offset: number) => {
+        const targets = circuits
+          .map((circuit) => ({ circuit, at: tile("circuit", circuit.id) }))
+          .filter((item): item is { circuit: Circuit; at: Tile } => !!item.at);
+        if (!targets.length) return;
+        const active = targets.some((item) => isOpen(item.circuit));
+        // The line runs in the gap below the feeder's row. Circuits in that
+        // row hang on it from above, circuits that wrapped into the next row
+        // are fed downwards from the same line.
+        let y = feeder.bottom + 8 + offset;
+        let reach = [feeder.center];
+        let through = feeder.center;
+        pipes.push({
+          d: roundedPath([[feeder.center, feeder.bottom - 6], [feeder.center, y]]),
+          color: hot,
+          active,
+        });
+        const bus = () => {
+          const from = Math.min(...reach);
+          const to = Math.max(...reach);
+          if (to - from > 1) pipes.push({ d: roundedPath([[from, y], [to, y]]), color: hot, active });
+        };
+        for (const row of rows(targets.map((item) => ({ ...item, bottom: item.at.bottom })))) {
+          const sameRow = row[0].at.top < y;
+          if (!sameRow && row[0].at.top - y > 30) {
+            // More than one row further down: start a new line above that row.
+            bus();
+            const next = row[0].at.top - 10 + offset;
+            pipes.push({ d: roundedPath([[through, y], [through, next]]), color: hot, active });
+            y = next;
+            reach = [through];
+          }
+          for (const item of row) {
+            const end = sameRow ? item.at.bottom - 6 : item.at.top + 6;
+            reach.push(item.at.center);
+            pipes.push({
+              d: roundedPath([[item.at.center, y], [item.at.center, end]]),
+              color: hot,
+              active: isOpen(item.circuit),
+            });
+          }
+          through = row[0].at.center;
         }
-        previous = y;
-      }
+        bus();
+      };
+
+      const upstream = present([
+        ...plant.heat_sources.map((source) => tile("source", source.id)),
+        ...plant.buffers.map((buffer) => tile("buffer", buffer.id)),
+      ]);
+      upstream.slice(1).forEach((to, index) => link(upstream[index], to, anyOpen));
+      const feeder = upstream[upstream.length - 1];
+      const groups = plant.pump_groups ?? [];
+      const fed = new Set<string>();
+      groups.forEach((group, index) => {
+        const at = tile("pump", group.id);
+        if (!at) return;
+        const circuits = plant.circuits.filter((circuit) => circuit.pump_group === group.id);
+        circuits.forEach((circuit) => fed.add(circuit.id));
+        if (feeder) link(feeder, at, circuits.some(isOpen));
+        manifold(at, circuits, index * 5);
+      });
+      // Circuits without a pump group hang directly on the buffer or boiler.
+      const direct = plant.circuits.filter((circuit) => !fed.has(circuit.id));
+      if (feeder && direct.length) manifold(feeder, direct, groups.length * 5);
 
       const lanes = this._lanes(plant);
       const walls = house.querySelector(".walls");
@@ -404,9 +475,8 @@ class HeizzentraleHouseCard extends LitElement {
             });
           }
         }
-        const tile = house.querySelector(`[data-part="circuit:${circuit.id}"]`);
-        if (tile && top !== undefined) {
-          const from = box(tile);
+        const from = tile("circuit", circuit.id);
+        if (from && top !== undefined) {
           const header = headerBase - 7 - lane * 4;
           const start = from.center + (lane - (lanes.length - 1) / 2) * 6;
           pipes.push({
@@ -1941,7 +2011,7 @@ class HeizzentraleHouseCard extends LitElement {
     .rooms,
     .parts {
       display: grid;
-      column-gap: 8px;
+      column-gap: 12px;
       row-gap: calc(10px + var(--hz-lanes, 0) * 4px);
       grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
     }

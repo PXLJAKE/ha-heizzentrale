@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.10.2-beta.1
+
+- Plant room pipes now read as a chain: heat source to buffer to pump group,
+  and from each pump group a line to its circuits. Without a buffer the heat
+  source feeds the pump group directly; circuits without a pump group hang on
+  the buffer or heat source.
+
 ## 0.10.1-beta.1
 
 - A stove can get a tile of its own on a floor, for stoves standing in a
