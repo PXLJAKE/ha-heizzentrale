@@ -40,7 +40,7 @@ export interface Stove {
 
 export interface RoomPlan {
   action: string;
-  source: "schedule" | "absence" | "stove";
+  source: "schedule" | "absence" | "stove" | "window";
   name: string;
   applied: boolean;
 }
@@ -50,6 +50,11 @@ export interface Control {
   schedules: Schedule[];
   rules: AbsenceRule[];
   stoves?: Stove[];
+  window?: { enabled: boolean; delay_min: number };
+  /** True while strands and pump groups are switched for real. */
+  switching?: boolean;
+  /** Strands Heizzentrale closed and pump groups it switched off. */
+  switched?: Record<string, string>;
   active_rules: string[];
   burning?: string[];
   rooms: Record<string, RoomPlan>;
@@ -791,6 +796,7 @@ export class HeizzentraleControl extends LitElement {
     if (!control || !this.plant) return nothing;
     const away = this._presets().includes("away") ? "preset:away" : "off";
     const stoves = control.stoves ?? [];
+    const windowRule = control.window ?? { enabled: true, delay_min: 2 };
     return html`
       <section class="set">
         <h3>${t("set_schedules")}</h3>
@@ -879,6 +885,45 @@ export class HeizzentraleControl extends LitElement {
             >
               + ${t("add_stove")}
             </button>`}
+      </section>
+      <section class="set">
+        <h3>${t("set_window")}</h3>
+        <div class="choices">
+          ${[false, true].map(
+            (enabled) =>
+              html`<button
+                class="choice ${windowRule.enabled === enabled ? "on" : ""}"
+                aria-pressed=${windowRule.enabled === enabled}
+                ?disabled=${this._busy}
+                @click=${() => this._save({ window: { ...windowRule, enabled } })}
+              >
+                ${t(enabled ? "window_on" : "window_off")}
+              </button>`,
+          )}
+        </div>
+        ${windowRule.enabled
+          ? html`<label class="field inline">
+              <span class="label">${t("window_delay")}</span>
+              <input
+                class="short"
+                type="number"
+                min="0"
+                max="60"
+                step="1"
+                .value=${String(windowRule.delay_min)}
+                @change=${(event: Event) => {
+                  const value = Number((event.target as HTMLInputElement).value);
+                  void this._save({
+                    window: {
+                      ...windowRule,
+                      delay_min: Number.isFinite(value) ? Math.min(60, Math.max(0, value)) : 2,
+                    },
+                  });
+                }}
+              />
+            </label>`
+          : nothing}
+        <p class="hint">${t("window_hint")}</p>
       </section>
       <section class="set">
         <h3>${t("set_apply")}</h3>

@@ -31,7 +31,7 @@ const room = (cur, tgt, action, preset, state = "heat") => ({ state,
   attributes: { current_temperature: cur, temperature: tgt, hvac_action: action, preset_mode: preset,
     preset_modes: ["comfort", "eco", "sleep", "away"], hvac_modes: ["heat", "off"], target_temp_step: 0.5, min_temp: 5, max_temp: 30 } });
 const states = {
-  "select.mode": { state: "observe", attributes: { options: ["off", "observe"] } },
+  "select.mode": { state: "observe", attributes: { options: ["off", "observe", "active"] } },
   "sensor.outside": T(4.6),
   "sensor.boiler": T(68.4), "sensor.boiler_state": B("heating"),
   "sensor.buf_top": T(62.1), "sensor.buf_mid": T(51.3), "sensor.buf_bottom": T(38.2), "sensor.buf_mean": T(50.5),
@@ -145,6 +145,7 @@ if (q.get("edit")) setTimeout(() => {
   else el._rule = structuredClone(control.rules[1]);
   el.scrollIntoView();
 }, 600);
+if (q.get("active")) { states["select.mode"].state = "active"; control.switching = true; control.switched = { dg: "close", saal: "close" }; }
 if (q.get("would")) { control.advice.circuits.og = { wanted: false, reason: "no_demand", action: "close", rooms: [] }; control.advice.circuits.dg = { wanted: true, reason: "rooms_calling", action: "open", rooms: ["Bad"] }; }
 if (q.get("arrange")) setTimeout(() => { (card.shadowRoot ? card : document.querySelector("heizzentrale-house-card"))._edit = true; }, 300);
 const pick = q.get("select");

@@ -37,6 +37,8 @@ class HeizzentraleData:
 
     manager: PlantManager
     mode: OperatingMode = field(default=DEFAULT_MODE)
+    # Set once the mode select has restored the mode chosen before a restart.
+    mode_restored: bool = False
 
 
 type HeizzentraleConfigEntry = ConfigEntry[HeizzentraleData]

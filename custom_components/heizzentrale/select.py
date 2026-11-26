@@ -23,7 +23,7 @@ async def async_setup_entry(
 
 
 class OperatingModeSelect(SelectEntity, RestoreEntity):
-    """Lets the user choose between off and observe."""
+    """Lets the user choose between off, observe and active."""
 
     _attr_has_entity_name = True
     _attr_translation_key = "operating_mode"
@@ -51,8 +51,11 @@ class OperatingModeSelect(SelectEntity, RestoreEntity):
             except ValueError:
                 mode = DEFAULT_MODE
         self._entry.runtime_data.mode = mode
+        self._entry.runtime_data.mode_restored = True
 
     async def async_select_option(self, option: str) -> None:
         """Change the mode."""
         self._entry.runtime_data.mode = OperatingMode(option)
         self.async_write_ha_state()
+        # Switch right away, or hand everything back when switching ends.
+        await self._entry.runtime_data.manager.control.async_run()

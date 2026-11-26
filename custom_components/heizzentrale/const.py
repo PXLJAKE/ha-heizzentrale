@@ -71,12 +71,13 @@ class ValveType(StrEnum):
 class OperatingMode(StrEnum):
     """Operating mode of a heating plant.
 
-    ``ACTIVE`` is intentionally missing: it is added together with the
-    switching logic. Until then the integration can never actuate anything.
+    Only ``ACTIVE`` switches strands and pump groups. The default is
+    ``OBSERVE``; an unknown stored value falls back to it.
     """
 
     OFF = "off"
     OBSERVE = "observe"
+    ACTIVE = "active"
 
 
 DEFAULT_MODE: Final = OperatingMode.OBSERVE

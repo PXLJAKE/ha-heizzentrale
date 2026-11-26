@@ -295,3 +295,220 @@ async def test_advice_for_strands_and_pump(
     await hass.async_block_till_done(wait_background_tasks=True)
     advice = control.payload()["advice"]["circuits"][circuit_id]
     assert (advice["action"], advice["rooms"]) == ("open", ["Bad"])
+
+
+def _fake_switches(hass: HomeAssistant) -> list[tuple[str, str, str]]:
+    """Fake switch and select services that record calls and set the state.
+
+    Registered after the plant is set up, because loading the select platform
+    registers the real ``select.select_option``.
+    """
+    made: list[tuple[str, str, str]] = []
+
+    async def handle(call: ServiceCall) -> None:
+        entity_ids = call.data["entity_id"]
+        for entity_id in [entity_ids] if isinstance(entity_ids, str) else entity_ids:
+            if call.service == "select_option":
+                value = call.data["option"]
+            else:
+                value = "on" if call.service == "turn_on" else "off"
+            made.append((call.service, entity_id, value))
+            hass.states.async_set(entity_id, value)
+
+    hass.services.async_register("homeassistant", "turn_on", handle)
+    hass.services.async_register("homeassistant", "turn_off", handle)
+    hass.services.async_register("select", "select_option", handle)
+    return made
+
+
+async def _switching_plant(hass: HomeAssistant) -> tuple[MockConfigEntry, Any]:
+    hass.states.async_set(
+        "climate.bad",
+        "heat",
+        {**ATTRS, "hvac_action": "idle", "temperature": 20, "current_temperature": 21},
+    )
+    hass.states.async_set("switch.eg_valve", "on")
+    hass.states.async_set("select.hk", "1_auto")
+    entry = _entry(
+        {
+            "type": "pump_group",
+            "data": {
+                CONF_NAME: "Pumpe",
+                "control_entity": "select.hk",
+                "control_off_option": "0_aus",
+                "control_on_option": "1_auto",
+            },
+        },
+        {
+            "type": "circuit",
+            "data": {
+                CONF_NAME: "EG",
+                "system_type": "one_pipe",
+                "valve_entity": "switch.eg_valve",
+                "valve_type": "nc",
+            },
+        },
+    )
+    await _setup(hass, entry)
+    group_id, circuit_id = list(entry.subentries)
+    hass.config_entries.async_add_subentry(
+        entry,
+        ConfigSubentry(
+            data={
+                CONF_NAME: "Bad",
+                "climate_entity": "climate.bad",
+                "window_entity": ["binary_sensor.bad_fenster"],
+                "circuit": circuit_id,
+                "pump_group": group_id,
+            },
+            subentry_type="room",
+            title="Bad",
+            unique_id=None,
+        ),
+    )
+    await hass.async_block_till_done(wait_background_tasks=True)
+    return entry, entry.runtime_data.manager.control
+
+
+async def _set_mode(hass: HomeAssistant, entry: MockConfigEntry, mode: str) -> None:
+    from custom_components.heizzentrale.const import OperatingMode
+
+    entry.runtime_data.mode = OperatingMode(mode)
+    entry.runtime_data.mode_restored = True
+    await entry.runtime_data.manager.control.async_run()
+
+
+async def test_observe_mode_never_switches_strands(
+    hass: HomeAssistant, freezer: FrozenDateTimeFactory
+) -> None:
+    _, control = await _switching_plant(hass)
+    switches = _fake_switches(hass)
+    await control.async_run()
+    freezer.tick(timedelta(minutes=11))
+    await control.async_run()
+    assert control.payload()["switching"] is False
+    assert switches == []
+
+
+async def test_active_mode_closes_and_reopens(
+    hass: HomeAssistant, freezer: FrozenDateTimeFactory
+) -> None:
+    entry, control = await _switching_plant(hass)
+    switches = _fake_switches(hass)
+    await _set_mode(hass, entry, "active")
+    assert switches == []  # still inside the ten minutes of waiting
+
+    freezer.tick(timedelta(minutes=11))
+    await control.async_run()
+    # The pump stops before its strand closes.
+    assert switches == [
+        ("select_option", "select.hk", "0_aus"),
+        ("turn_off", "switch.eg_valve", "off"),
+    ]
+    switches.clear()
+
+    # Someone opens the strand by hand: it is not closed a second time.
+    hass.states.async_set("switch.eg_valve", "on")
+    await control.async_run()
+    assert switches == []
+    hass.states.async_set("switch.eg_valve", "off")
+
+    # The room asks for heat: strand first, then the pump.
+    hass.states.async_set(
+        "climate.bad", "heat", {**ATTRS, "hvac_action": "heating", "temperature": 22}
+    )
+    await control.async_run()
+    assert switches == [
+        ("turn_on", "switch.eg_valve", "on"),
+        ("select_option", "select.hk", "1_auto"),
+    ]
+    assert control.payload()["switched"] == {}
+
+
+async def test_heating_switched_off_by_hand_stays_off(
+    hass: HomeAssistant,
+) -> None:
+    entry, _ = await _switching_plant(hass)
+    switches = _fake_switches(hass)
+    hass.states.async_set("select.hk", "0_aus")
+    hass.states.async_set(
+        "climate.bad", "heat", {**ATTRS, "hvac_action": "heating", "temperature": 22}
+    )
+    await _set_mode(hass, entry, "active")
+    assert switches == []
+
+
+async def test_leaving_active_mode_hands_everything_back(
+    hass: HomeAssistant, freezer: FrozenDateTimeFactory
+) -> None:
+    entry, control = await _switching_plant(hass)
+    switches = _fake_switches(hass)
+    await _set_mode(hass, entry, "active")
+    freezer.tick(timedelta(minutes=11))
+    await control.async_run()
+    switches.clear()
+    await _set_mode(hass, entry, "observe")
+    assert sorted(switches) == [
+        ("select_option", "select.hk", "1_auto"),
+        ("turn_on", "switch.eg_valve", "on"),
+    ]
+    assert control.payload()["switched"] == {}
+
+
+async def test_nothing_is_touched_before_the_mode_is_restored(
+    hass: HomeAssistant,
+) -> None:
+    entry, control = await _switching_plant(hass)
+    switches = _fake_switches(hass)
+    control._switched = {list(entry.subentries)[1]: "close"}
+    entry.runtime_data.mode_restored = False
+    await control.async_run()
+    assert switches == []
+    assert control.payload()["switched"] != {}
+
+
+async def test_cold_room_keeps_its_strand_open(
+    hass: HomeAssistant, freezer: FrozenDateTimeFactory
+) -> None:
+    entry, control = await _switching_plant(hass)
+    switches = _fake_switches(hass)
+    hass.states.async_set("climate.bad", "off", {**ATTRS, "current_temperature": 6})
+    await _set_mode(hass, entry, "active")
+    freezer.tick(timedelta(minutes=11))
+    await control.async_run()
+    assert switches == []
+
+
+async def test_open_window_switches_room_off_and_back(
+    hass: HomeAssistant,
+    freezer: FrozenDateTimeFactory,
+    calls: list[tuple[str, dict[str, Any]]],
+) -> None:
+    entry, control = await _switching_plant(hass)
+    room_id = list(entry.subentries)[2]
+    await control.async_save(enabled=True)
+    hass.states.async_set("binary_sensor.bad_fenster", "on")
+    await control.async_run()
+    assert calls == []  # a short airing changes nothing
+
+    freezer.tick(timedelta(minutes=3))
+    await control.async_run()
+    assert calls == [
+        ("set_hvac_mode", {"entity_id": "climate.bad", "hvac_mode": "off"})
+    ]
+    assert control.payload()["rooms"][room_id]["source"] == "window"
+
+    hass.states.async_set("binary_sensor.bad_fenster", "off")
+    await control.async_run()
+    assert calls[-1] == (
+        "set_hvac_mode",
+        {"entity_id": "climate.bad", "hvac_mode": "heat"},
+    )
+    assert room_id not in control.payload()["rooms"]
+
+    # Switched off in the settings: the window no longer changes anything.
+    calls.clear()
+    await control.async_save(window={"enabled": False, "delay_min": 0})
+    hass.states.async_set("binary_sensor.bad_fenster", "on")
+    await control.async_run()
+    assert calls == []

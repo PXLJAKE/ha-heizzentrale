@@ -2,7 +2,7 @@
 
 !!! warning "Beta"
     Heizzentrale ist in Entwicklung. Diese Seite beschreibt den Stand der
-    Version 0.10.
+    Version 0.11.
 
 ## Das gibt es
 
@@ -13,12 +13,14 @@
 - Räume anordnen, zusätzliche Fühler
 - Spreizung je Strang als Sensor
 - Vorschau, was an Strängen und Pumpengruppe geschaltet würde
+- Stränge und Pumpengruppe wirklich schalten (Modus „Schaltet“)
+- Offene Fenster schalten den Raum aus
+- Frostschutz: kalte Räume halten ihren Strang offen
 - Deutsch und Englisch
 
 ## Das ist geplant
 
-- Stränge und Pumpengruppe wirklich schalten, mit Überwachung der
-  Stellantriebe
+- Überwachung der Stellantriebe, die bei einem Ausfall von selbst öffnet
 - Komfortprofile (Komfort, Ausgewogen, Sparsam)
 - „Jetzt zwei Stunden heizen“ je Raum
 - Assistent für den hydraulischen Abgleich in der Ansicht

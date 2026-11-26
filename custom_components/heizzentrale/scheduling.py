@@ -24,6 +24,7 @@ MINUTES_PER_WEEK = 7 * MINUTES_PER_DAY
 SOURCE_SCHEDULE = "schedule"
 SOURCE_ABSENCE = "absence"
 SOURCE_STOVE = "stove"
+SOURCE_WINDOW = "window"
 
 # A stove counts as out again once it is this much cooler than its threshold.
 STOVE_HYSTERESIS = 5.0

@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.11.0-beta.1
+
+- New operating mode "Switching": Heizzentrale closes circuits no room needs
+  and switches the pump group off when no circuit needs heat. It has to be
+  confirmed a second time; "Observe" stays the default.
+- Safety: opening is always enforced, closing happens once per change, a
+  pump group is only switched on again if Heizzentrale switched it off, the
+  pump stops before its circuits close, nothing is touched after a restart
+  until the stored mode is known, and leaving the mode opens everything.
+- Frost guard: a room below 8 °C always counts as asking for heat.
+- Open windows: the thermostat of a room is switched off after a wait
+  (default 2 minutes) and put back when the window closes. Can be switched
+  off in the settings.
+
 ## 0.10.2-beta.1
 
 - Plant room pipes now read as a chain: heat source to buffer to pump group,

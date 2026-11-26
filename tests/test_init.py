@@ -36,7 +36,7 @@ async def test_setup_and_unload(
     state = hass.states.get(_mode_entity_id(hass, mock_entry))
     assert state is not None
     assert state.state == OperatingMode.OBSERVE
-    assert state.attributes["options"] == ["off", "observe"]
+    assert state.attributes["options"] == ["off", "observe", "active"]
 
     assert await hass.config_entries.async_unload(mock_entry.entry_id)
     assert mock_entry.state is ConfigEntryState.NOT_LOADED
@@ -78,7 +78,7 @@ async def test_unknown_restored_mode_falls_back(
 ) -> None:
     """A stored mode this version does not know becomes observe."""
     mock_entry.add_to_hass(hass)
-    mock_restore_cache(hass, [State("select.heizung_operating_mode", "active")])
+    mock_restore_cache(hass, [State("select.heizung_operating_mode", "turbo")])
     assert await hass.config_entries.async_setup(mock_entry.entry_id)
     assert hass.states.get(_mode_entity_id(hass, mock_entry)).state == "observe"
 

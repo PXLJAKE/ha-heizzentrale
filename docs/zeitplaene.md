@@ -44,3 +44,16 @@ würde. Passt das, stellst du ganz unten in den Einstellungen auf
 !!! warning "Eigene Automationen"
     Schalte Automationen ab, die dieselben Thermostate zeitlich steuern,
     bevor du auf Anwenden stellst. Sonst arbeiten beide gegeneinander.
+
+## Offene Fenster
+
+Hat ein Raum einen Fensterkontakt, schaltet Heizzentrale sein Thermostat
+aus, sobald das Fenster länger als die Wartezeit offen ist (Standard: 2
+Minuten). Beim Schließen stellt sie es wieder so, wie es vorher war. Kurzes
+Stoßlüften unter der Wartezeit ändert nichts.
+
+- Das gilt nur, wenn „Anwenden“ gewählt ist.
+- Unter **Einstellungen, Offene Fenster** stellst du die Wartezeit ein oder
+  schaltest die Regel ganz ab.
+- Soll ein einzelner Raum nicht reagieren, nimm in seinen Einstellungen den
+  Fensterkontakt heraus.

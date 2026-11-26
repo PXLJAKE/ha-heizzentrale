@@ -175,6 +175,7 @@ class HeizzentraleHouseCard extends LitElement {
     _pendingTarget: { state: true },
     _control: { state: true },
     _edit: { state: true },
+    _confirmActive: { state: true },
     _drag: { state: true },
     _sensorPlace: { state: true },
     _sensorFilter: { state: true },
@@ -192,6 +193,7 @@ class HeizzentraleHouseCard extends LitElement {
   private _targetTimer?: number;
   private _control?: Control;
   private _adviceTimer?: number;
+  private _confirmActive = false;
   private _edit = false;
   private _drag?: Drag;
   private _sensorPlace?: { place: string; name: string };
@@ -650,12 +652,12 @@ class HeizzentraleHouseCard extends LitElement {
         >`
       : nothing;
     const modeChip =
-      mode === "observe" || mode === "off"
+      mode === "observe" || mode === "off" || mode === "active"
         ? html`<button
             class="chip mode ${mode}"
             @click=${() => this._select({ kind: "mode" })}
           >
-            ${t(mode === "observe" ? "mode_observe" : "mode_off")}
+            ${t(`mode_${mode}` as TextKey)}
           </button>`
         : nothing;
     return html`
@@ -1281,7 +1283,8 @@ class HeizzentraleHouseCard extends LitElement {
 
   /** "Would close now": what switching would do, shown while only observing. */
   private _renderWould(action?: string | null) {
-    if (!action) return nothing;
+    // While switching for real the advice is carried out, not announced.
+    if (!action || this._control?.switching) return nothing;
     return html`<div class="would">${this._t(`would_${action}` as TextKey)}</div>`;
   }
 
@@ -1297,8 +1300,9 @@ class HeizzentraleHouseCard extends LitElement {
 
     if (selection.kind === "mode") {
       const mode = this._state(plant.mode_entity)?.state;
-      title = t(mode === "off" ? "mode_off" : "mode_observe");
-      lines = [t(mode === "off" ? "x_mode_off" : "x_mode_observe")];
+      const known = mode === "off" || mode === "active" ? mode : "observe";
+      title = t(`mode_${known}` as TextKey);
+      lines = [t(`x_mode_${known}` as TextKey)];
     } else if (selection.kind === "circuit") {
       const circuit = plant.circuits.find((item) => item.id === selection.id);
       if (!circuit) return undefined;
@@ -1339,7 +1343,10 @@ class HeizzentraleHouseCard extends LitElement {
         lines.push(
           t(`x_adv_${advice.reason}` as TextKey, { rooms: advice.rooms.join(", ") }),
         );
-        if (advice.action) lines.push(t(`x_adv_would_${advice.action}` as TextKey));
+        if (this._control?.switching) {
+          if (this._control.switched?.[circuit.id] === "close")
+            lines.push(t(advice.action ? "x_adv_by_hand" : "x_adv_closed"));
+        } else if (advice.action) lines.push(t(`x_adv_would_${advice.action}` as TextKey));
       }
     } else if (selection.kind === "room") {
       const room = plant.rooms.find((item) => item.id === selection.id);
@@ -1394,7 +1401,12 @@ class HeizzentraleHouseCard extends LitElement {
         );
       const advice = this._control?.advice?.pump_groups[group.id];
       if (advice?.reason === "manual") lines.push(t("x_padv_manual"));
-      else if (advice?.action) lines.push(t(`x_padv_would_${advice.action}` as TextKey));
+      else if (this._control?.switching) {
+        if (this._control.switched?.[group.id] === "off")
+          lines.push(t(advice?.action === "off" ? "x_padv_by_hand" : "x_padv_off"));
+        else if (advice?.action === "on") lines.push(t("x_padv_hand_off"));
+      } else if (advice?.action)
+        lines.push(t(`x_padv_would_${advice.action}` as TextKey));
     } else if (selection.kind === "buffer") {
       const buffer = plant.buffers.find((item) => item.id === selection.id);
       if (!buffer) return undefined;
@@ -1609,13 +1621,16 @@ class HeizzentraleHouseCard extends LitElement {
   /** What the schedule or an absence rule wants for this room right now. */
   private _renderPlan(room: Room) {
     const control = this._control;
-    if (
-      !control ||
-      (!control.schedules.length && !control.rules.length && !control.stoves?.length)
-    )
-      return nothing;
+    if (!control) return nothing;
     const t = this._t;
     const plan = control.rooms[room.id];
+    if (
+      !plan &&
+      !control.schedules.length &&
+      !control.rules.length &&
+      !control.stoves?.length
+    )
+      return nothing;
     const action = plan
       ? actionLabel(plan.action, t, this._hass as any, room.climate_entity)
       : "";
@@ -1629,7 +1644,9 @@ class HeizzentraleHouseCard extends LitElement {
                   action,
                 })}
               </p>
-              ${control.enabled ? nothing : html`<p>${t("plan_would")}</p>`}`
+              ${control.enabled || (plan.source === "window" && plan.applied)
+                ? nothing
+                : html`<p>${t("plan_would")}</p>`}`
           : html`<p>${t("plan_none")}</p>`}
       </div>
     `;
@@ -1688,6 +1705,14 @@ class HeizzentraleHouseCard extends LitElement {
     `;
   }
 
+  private async _setMode(plant: Plant, option: string): Promise<void> {
+    await this._call("select", "select_option", {
+      entity_id: plant.mode_entity,
+      option,
+    });
+    window.setTimeout(() => void this._loadControl(), 800);
+  }
+
   private _renderSettings(plant: Plant, colors: Map<string, string>) {
     const t = this._t;
     const modeState = this._state(plant.mode_entity);
@@ -1723,19 +1748,47 @@ class HeizzentraleHouseCard extends LitElement {
               (option) =>
                 html`<button
                   class="choice ${modeState?.state === option ? "on" : ""}"
-                  @click=${() =>
-                    this._call("select", "select_option", {
-                      entity_id: plant.mode_entity,
-                      option,
-                    })}
+                  @click=${() => {
+                    // Real switching starts only after a second, explicit yes.
+                    if (option === "active" && modeState?.state !== "active") {
+                      this._confirmActive = true;
+                      return;
+                    }
+                    this._confirmActive = false;
+                    void this._setMode(plant, option);
+                  }}
                 >
                   ${t(`mode_${option}` as TextKey)}
                 </button>`,
             )}
           </div>
+          ${this._confirmActive
+            ? html`<div class="confirm">
+                <p>${t("mode_confirm")}</p>
+                <div class="choices">
+                  <button
+                    class="choice on"
+                    @click=${() => {
+                      this._confirmActive = false;
+                      void this._setMode(plant, "active");
+                    }}
+                  >
+                    ${t("mode_confirm_yes")}
+                  </button>
+                  <button class="choice" @click=${() => (this._confirmActive = false)}>
+                    ${t("cancel")}
+                  </button>
+                </div>
+              </div>`
+            : nothing}
           <p class="hint">
-            ${t(modeState?.state === "off" ? "x_mode_off" : "x_mode_observe")}
-            ${t("set_mode_active")}
+            ${t(
+              `x_mode_${
+                modeState?.state === "off" || modeState?.state === "active"
+                  ? modeState.state
+                  : "observe"
+              }` as TextKey,
+            )}
           </p>
         </section>
         <section class="set">
@@ -1900,6 +1953,18 @@ class HeizzentraleHouseCard extends LitElement {
     }
     button.chip {
       cursor: pointer;
+    }
+    .chip.mode.active {
+      background: color-mix(in srgb, var(--hz-ok, #2e9e5b) 24%, transparent);
+    }
+    .confirm {
+      border: 1px solid var(--hz-warn);
+      border-radius: 10px;
+      padding: 10px 12px;
+      margin-top: 8px;
+    }
+    .confirm p {
+      margin: 0 0 8px;
     }
     .chip.mode.observe {
       background: color-mix(in srgb, var(--hz-warn) 22%, transparent);
