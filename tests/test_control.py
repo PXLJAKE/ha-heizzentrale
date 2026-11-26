@@ -7,6 +7,7 @@ from typing import Any
 
 import pytest
 from freezegun.api import FrozenDateTimeFactory
+from homeassistant.config_entries import ConfigSubentry
 from homeassistant.const import CONF_NAME
 from homeassistant.core import HomeAssistant, ServiceCall
 from homeassistant.util import dt as dt_util
@@ -222,3 +223,75 @@ async def test_stove_turns_rooms_down_while_burning(
         ("set_preset_mode", {"entity_id": "climate.bad", "preset_mode": "comfort"}),
     ]
     assert control.payload()["burning"] == []
+
+
+async def test_advice_for_strands_and_pump(
+    hass: HomeAssistant, freezer: FrozenDateTimeFactory
+) -> None:
+    hass.states.async_set(
+        "climate.bad", "heat", {**ATTRS, "hvac_action": "idle", "temperature": 20}
+    )
+    hass.states.async_set("switch.eg_valve", "on")
+    hass.states.async_set("select.hk", "1_auto")
+    entry = _entry(
+        {
+            "type": "pump_group",
+            "data": {
+                CONF_NAME: "Pumpe",
+                "control_entity": "select.hk",
+                "control_off_option": "0_aus",
+                "control_on_option": "1_auto",
+            },
+        },
+        {
+            "type": "circuit",
+            "data": {
+                CONF_NAME: "EG",
+                "system_type": "one_pipe",
+                "valve_entity": "switch.eg_valve",
+                "valve_type": "nc",
+            },
+        },
+    )
+    await _setup(hass, entry)
+    circuit_id = list(entry.subentries)[1]
+    hass.config_entries.async_add_subentry(
+        entry,
+        ConfigSubentry(
+            data={
+                CONF_NAME: "Bad",
+                "climate_entity": "climate.bad",
+                "circuit": circuit_id,
+            },
+            subentry_type="room",
+            title="Bad",
+            unique_id=None,
+        ),
+    )
+    await hass.async_block_till_done(wait_background_tasks=True)
+    control = entry.runtime_data.manager.control
+    await control.async_run()
+    advice = control.payload()["advice"]
+    assert advice["circuits"][circuit_id]["reason"] == "waiting"
+    assert advice["circuits"][circuit_id]["action"] is None
+
+    freezer.tick(timedelta(minutes=11))
+    await control.async_run()
+    advice = control.payload()["advice"]
+    assert advice["circuits"][circuit_id]["action"] == "close"
+    assert next(iter(advice["pump_groups"].values()))["action"] == "off"
+
+    # A mode set by hand on the heating circuit is left alone.
+    hass.states.async_set("select.hk", "2_heizen")
+    await control.async_run()
+    group = next(iter(control.payload()["advice"]["pump_groups"].values()))
+    assert (group["reason"], group["action"]) == ("manual", None)
+
+    # The room asks for heat again: the strand would open at once.
+    hass.states.async_set("switch.eg_valve", "off")
+    hass.states.async_set(
+        "climate.bad", "heat", {**ATTRS, "hvac_action": "heating", "temperature": 22}
+    )
+    await hass.async_block_till_done(wait_background_tasks=True)
+    advice = control.payload()["advice"]["circuits"][circuit_id]
+    assert (advice["action"], advice["rooms"]) == ("open", ["Bad"])

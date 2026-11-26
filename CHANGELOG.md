@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.10.0-beta.1
+
+- "Would switch now": Heizzentrale works out which circuits are needed from
+  the thermostats and window contacts of their rooms and shows on each
+  circuit and pump group what it would do. Nothing is switched yet.
+- A circuit would close after 10 minutes without demand and open at once when
+  a room asks for heat. Circuits without rooms or with an unreadable
+  thermostat always stay open. A pump group in a mode chosen by hand is left
+  alone.
+- Edit mode on phones: rooms are dragged by a grip, so the page still scrolls.
+
 ## 0.9.0-beta.1
 
 - Arrange the house: the pencil in the house view starts an edit mode. Rooms
