@@ -79,6 +79,7 @@ if (q.get("panel")) {
   card = { setConfig() {}, set hass(value) { panel.hass = value; }, _select: (x) => inner._select(x) };
 }
 if (q.get("empty")) { for (const k of ["heat_sources", "buffers", "pump_groups", "circuits", "rooms", "floors"]) plant[k] = []; }
+if (q.get("nobuffer")) plant.buffers = [];
 if (q.get("partial")) { plant.rooms = []; plant.floors = []; plant.pump_groups = []; }
 card.setConfig({});
 plant.all_floors = plant.floors;
