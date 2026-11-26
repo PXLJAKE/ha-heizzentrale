@@ -28,9 +28,10 @@ if (q.get("theme") === "dark") document.documentElement.classList.add("dark");
 const T = (v) => ({ state: String(v), attributes: { unit_of_measurement: "°C" } });
 const B = (v) => ({ state: v, attributes: {} });
 const room = (cur, tgt, action, preset, state = "heat") => ({ state,
-  attributes: { current_temperature: cur, temperature: tgt, hvac_action: action, preset_mode: preset } });
+  attributes: { current_temperature: cur, temperature: tgt, hvac_action: action, preset_mode: preset,
+    preset_modes: ["comfort", "eco", "sleep", "away"], hvac_modes: ["heat", "off"], target_temp_step: 0.5, min_temp: 5, max_temp: 30 } });
 const states = {
-  "select.mode": B("observe"),
+  "select.mode": { state: "observe", attributes: { options: ["off", "observe"] } },
   "sensor.outside": T(4.6),
   "sensor.boiler": T(68.4), "sensor.boiler_state": B("heating"),
   "sensor.buf_top": T(62.1), "sensor.buf_mid": T(51.3), "sensor.buf_bottom": T(38.2), "sensor.buf_mean": T(50.5),
@@ -67,7 +68,19 @@ const plant = { entry_id: "demo", name: "Heizung", mode_entity: "select.mode", o
   ] };
 const card = document.getElementById("card");
 card.setConfig({});
-card.hass = { states, language: q.get("lang") || "de", callWS: async () => ({ plants: [plant] }) };
+const PRESETS = { comfort: "Komfort", eco: "Eco", sleep: "Schlafen", away: "Abwesend" };
+const hass = () => ({ states: { ...states }, language: q.get("lang") || "de", callWS: async () => ({ plants: [plant] }),
+  formatEntityAttributeValue: (_s, _a, v) => (q.get("lang") === "en" ? v : PRESETS[v] ?? v),
+  callService: async (_d, service, data) => {
+    const old = states[data.entity_id];
+    if (service === "set_temperature") states[data.entity_id] = { ...old, attributes: { ...old.attributes, temperature: data.temperature } };
+    if (service === "set_preset_mode") states[data.entity_id] = { ...old, attributes: { ...old.attributes, preset_mode: data.preset_mode } };
+    if (service === "set_hvac_mode") states[data.entity_id] = { ...old, state: data.hvac_mode };
+    if (service === "select_option") states[data.entity_id] = { ...old, state: data.option };
+    card.hass = hass();
+  } });
+card.hass = hass();
+if (q.get("view")) setTimeout(() => { card._view = q.get("view"); }, 300);
 const pick = q.get("select");
 if (pick) setTimeout(() => { const [kind, id] = pick.split(":"); card._select({ kind, id }); }, 300);
 </script>

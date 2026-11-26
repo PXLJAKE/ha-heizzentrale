@@ -15,6 +15,8 @@ interface Hass {
   language?: string;
   locale?: { language?: string };
   callWS<T>(message: Record<string, unknown>): Promise<T>;
+  callService?(domain: string, service: string, data?: Record<string, unknown>): Promise<unknown>;
+  formatEntityAttributeValue?(state: HassEntity, attribute: string, value?: unknown): string;
 }
 
 interface Circuit {
@@ -132,6 +134,8 @@ class HeizzentraleHouseCard extends LitElement {
     _selection: { state: true },
     _config: { state: true },
     _pipes: { state: true },
+    _view: { state: true },
+    _pendingTarget: { state: true },
   };
 
   private _hass?: Hass;
@@ -141,6 +145,9 @@ class HeizzentraleHouseCard extends LitElement {
   private _selection?: Selection;
   private _loading = false;
   private _watched = new Set<string>();
+  private _view: "house" | "settings" = "house";
+  private _pendingTarget?: { entity: string; value: number };
+  private _targetTimer?: number;
   private _pipes: Pipe[] = [];
   private _pipeSignature = "";
   private _resize?: ResizeObserver;
@@ -456,9 +463,13 @@ class HeizzentraleHouseCard extends LitElement {
     return html`
       <ha-card>
         ${this._renderHeader(plant)}
-        ${empty ? html`<div class="note">${t("empty")}</div>` : nothing}
-        ${empty ? nothing : this._renderHouse(plant, colors)}
-        ${this._renderExplanation(plant)}
+        ${empty && this._view === "house"
+          ? html`<div class="note">${t("empty")}</div>`
+          : nothing}
+        ${this._view === "settings"
+          ? this._renderSettings(plant, colors)
+          : html`${empty ? nothing : this._renderHouse(plant, colors)}
+            ${this._renderExplanation(plant)} ${this._renderRoomDialog(plant, colors)}`}
       </ha-card>
     `;
   }
@@ -483,7 +494,20 @@ class HeizzentraleHouseCard extends LitElement {
     return html`
       <div class="header">
         <h2>${this._config.title || plant.name}</h2>
-        <div class="chips">${outdoor}${modeChip}</div>
+        <div class="chips">
+          ${outdoor}${modeChip}
+          <button
+            class="chip icon ${this._view === "settings" ? "on" : ""}"
+            aria-label=${t(this._view === "settings" ? "back" : "settings")}
+            title=${t(this._view === "settings" ? "back" : "settings")}
+            @click=${() => {
+              this._selection = undefined;
+              this._view = this._view === "settings" ? "house" : "settings";
+            }}
+          >
+            ${this._view === "settings" ? ICON_HOME : ICON_GEAR}
+          </button>
+        </div>
       </div>
     `;
   }
@@ -587,7 +611,9 @@ class HeizzentraleHouseCard extends LitElement {
               ? "–"
               : this._format(typeof target === "number" ? target : undefined, "")}${unit}</span
           >
-          ${preset ? html`<span class="preset">${preset}</span>` : nothing}
+          ${preset
+            ? html`<span class="preset">${this._presetLabel(climate, preset)}</span>`
+            : nothing}
         </div>
       </div>
     `;
@@ -712,9 +738,10 @@ class HeizzentraleHouseCard extends LitElement {
 
   // -- explanations ---------------------------------------------------------
 
-  private _renderExplanation(plant: Plant) {
-    const selection = this._selection;
-    if (!selection) return nothing;
+  private _explain(
+    plant: Plant,
+    selection: Selection,
+  ): { title: string; lines: string[] } | undefined {
     const t = this._t;
     let title = "";
     let lines: string[] = [];
@@ -725,7 +752,7 @@ class HeizzentraleHouseCard extends LitElement {
       lines = [t(mode === "off" ? "x_mode_off" : "x_mode_observe")];
     } else if (selection.kind === "circuit") {
       const circuit = plant.circuits.find((item) => item.id === selection.id);
-      if (!circuit) return nothing;
+      if (!circuit) return undefined;
       title = circuit.name;
       lines.push(
         t("x_what_circuit", {
@@ -760,7 +787,7 @@ class HeizzentraleHouseCard extends LitElement {
       if (rooms.length) lines.push(t("x_rooms_on", { rooms: rooms.join(", ") }));
     } else if (selection.kind === "room") {
       const room = plant.rooms.find((item) => item.id === selection.id);
-      if (!room) return nothing;
+      if (!room) return undefined;
       title = room.name;
       const climate = this._state(room.climate_entity);
       const attributes = climate?.attributes ?? {};
@@ -778,19 +805,23 @@ class HeizzentraleHouseCard extends LitElement {
       if (this._state(room.window_entity)?.state === "on")
         lines.push(t("x_room_window"));
       if (attributes.preset_mode && attributes.preset_mode !== "none")
-        lines.push(t("x_room_preset", { preset: String(attributes.preset_mode) }));
+        lines.push(
+          t("x_room_preset", {
+            preset: this._presetLabel(climate, String(attributes.preset_mode)),
+          }),
+        );
       const circuit = plant.circuits.find((item) => item.id === room.circuit);
       if (circuit) lines.push(t("x_room_circuit", { circuit: circuit.name }));
     } else if (selection.kind === "buffer") {
       const buffer = plant.buffers.find((item) => item.id === selection.id);
-      if (!buffer) return nothing;
+      if (!buffer) return undefined;
       title = buffer.name;
       lines.push(t("x_buffer", { name: buffer.name }));
       if (this._number(buffer.mean_entity) !== undefined)
         lines.push(t("x_buffer_mean", { mean: this._temp(buffer.mean_entity) }));
     } else {
       const source = plant.heat_sources.find((item) => item.id === selection.id);
-      if (!source) return nothing;
+      if (!source) return undefined;
       title = source.name;
       const raw = this._state(source.status_entity)?.state;
       lines.push(
@@ -803,19 +834,323 @@ class HeizzentraleHouseCard extends LitElement {
       if (tempEntity) lines.push(t("x_source_temp", { temp: this._temp(tempEntity) }));
     }
 
+    return { title, lines };
+  }
+
+  private _presetLabel(climate: HassEntity | undefined, preset: string): string {
+    if (climate && this._hass?.formatEntityAttributeValue) {
+      return this._hass.formatEntityAttributeValue(climate, "preset_mode", preset);
+    }
+    return preset;
+  }
+
+  private _renderExplanation(plant: Plant) {
+    const selection = this._selection;
+    if (!selection || selection.kind === "room") return nothing;
+    const explained = this._explain(plant, selection);
+    if (!explained) return nothing;
     return html`
       <div class="explain" role="status">
         <div class="explain-head">
-          <strong>${title}</strong>
+          <strong>${explained.title}</strong>
           <button
             class="close"
-            aria-label=${t("close")}
+            aria-label=${this._t("close")}
             @click=${() => (this._selection = undefined)}
           >
             ✕
           </button>
         </div>
-        ${lines.map((line) => html`<p>${line}</p>`)}
+        ${explained.lines.map((line) => html`<p>${line}</p>`)}
+      </div>
+    `;
+  }
+
+  // -- room window ----------------------------------------------------------
+
+  private _call(domain: string, service: string, data: Record<string, unknown>): void {
+    void this._hass?.callService?.(domain, service, data);
+  }
+
+  /** Change the setpoint; the call goes out once the taps have stopped. */
+  private _setTarget(entity: string, value: number, min: number, max: number): void {
+    const target = Math.round(Math.min(max, Math.max(min, value)) * 10) / 10;
+    this._pendingTarget = { entity, value: target };
+    window.clearTimeout(this._targetTimer);
+    this._targetTimer = window.setTimeout(() => {
+      this._call("climate", "set_temperature", { entity_id: entity, temperature: target });
+      this._targetTimer = window.setTimeout(() => (this._pendingTarget = undefined), 2500);
+    }, 700);
+  }
+
+  private _renderRoomDialog(plant: Plant, colors: Map<string, string>) {
+    const selection = this._selection;
+    if (!selection || selection.kind !== "room") return nothing;
+    const room = plant.rooms.find((item) => item.id === selection.id);
+    if (!room?.climate_entity) return nothing;
+    const t = this._t;
+    const entity = room.climate_entity;
+    const climate = this._state(entity);
+    const a = climate?.attributes ?? {};
+    const available =
+      !!climate && climate.state !== "unavailable" && climate.state !== "unknown";
+    const off = climate?.state === "off";
+    const step = Number(a.target_temp_step) || 0.5;
+    const min = typeof a.min_temp === "number" ? a.min_temp : 5;
+    const max = typeof a.max_temp === "number" ? a.max_temp : 30;
+    const pending =
+      this._pendingTarget?.entity === entity ? this._pendingTarget.value : undefined;
+    const target = pending ?? (typeof a.temperature === "number" ? a.temperature : undefined);
+    const presets: string[] = Array.isArray(a.preset_modes)
+      ? a.preset_modes.filter((preset: string) => preset !== "none")
+      : [];
+    const modes: string[] = Array.isArray(a.hvac_modes) ? a.hvac_modes : [];
+    const onMode = ["heat", "auto", "heat_cool"].find((mode) => modes.includes(mode));
+    const circuit = plant.circuits.find((item) => item.id === room.circuit);
+    const floor = plant.floors.find((item) => item.id === room.floor);
+    const close = () => (this._selection = undefined);
+    const lines = this._explain(plant, selection)?.lines ?? [];
+    const where = [circuit ? `${t("circuit")} ${circuit.name}` : "", floor?.name ?? ""]
+      .filter(Boolean)
+      .join(" · ");
+    return html`
+      <div class="backdrop" @click=${close}>
+        <div
+          class="sheet"
+          role="dialog"
+          aria-modal="true"
+          aria-label=${room.name}
+          @click=${(event: Event) => event.stopPropagation()}
+          @keydown=${(event: KeyboardEvent) => event.key === "Escape" && close()}
+        >
+          <div class="sheet-head">
+            <div>
+              <div class="sheet-title">${room.name}</div>
+              <div class="sheet-sub">
+                ${circuit
+                  ? html`<span class="dot" style="background:${colors.get(circuit.id)}"></span>`
+                  : nothing}${where}
+              </div>
+            </div>
+            <button class="close" aria-label=${t("close")} @click=${close}>✕</button>
+          </div>
+          <div class="sheet-now ${a.hvac_action === "heating" ? "heating" : ""}">
+            <span class="now-value"
+              >${this._format(
+                typeof a.current_temperature === "number" ? a.current_temperature : undefined,
+                "",
+              )}°</span
+            >
+            <span class="now-label"
+              >${a.hvac_action === "heating" ? t("heating") : off ? t("mode_off") : t("idle")}</span
+            >
+          </div>
+          <div class="stepper">
+            <button
+              aria-label="−"
+              ?disabled=${!available || off || target === undefined || target <= min}
+              @click=${() => this._setTarget(entity, (target ?? min) - step, min, max)}
+            >
+              −
+            </button>
+            <div class="stepper-value">
+              <span>${off ? "–" : `${this._format(target, "")}°`}</span>
+              <small>${t("target")}</small>
+            </div>
+            <button
+              aria-label="+"
+              ?disabled=${!available || off || target === undefined || target >= max}
+              @click=${() => this._setTarget(entity, (target ?? min) + step, min, max)}
+            >
+              +
+            </button>
+          </div>
+          ${presets.length
+            ? html`<div class="choices">
+                ${presets.map(
+                  (preset) =>
+                    html`<button
+                      class="choice ${a.preset_mode === preset ? "on" : ""}"
+                      ?disabled=${!available || off}
+                      @click=${() =>
+                        this._call("climate", "set_preset_mode", {
+                          entity_id: entity,
+                          preset_mode: preset,
+                        })}
+                    >
+                      ${this._presetLabel(climate, preset)}
+                    </button>`,
+                )}
+              </div>`
+            : nothing}
+          ${modes.includes("off") && onMode
+            ? html`<button
+                class="wide"
+                ?disabled=${!available}
+                @click=${() =>
+                  this._call("climate", "set_hvac_mode", {
+                    entity_id: entity,
+                    hvac_mode: off ? onMode : "off",
+                  })}
+              >
+                ${t(off ? "room_turn_on" : "room_turn_off")}
+              </button>`
+            : nothing}
+          <div class="why">
+            <div class="why-title">${t("why")}</div>
+            ${lines.map((line) => html`<p>${line}</p>`)}
+          </div>
+          <button
+            class="link"
+            @click=${() => {
+              close();
+              this.dispatchEvent(
+                new CustomEvent("hass-more-info", {
+                  detail: { entityId: entity },
+                  bubbles: true,
+                  composed: true,
+                }),
+              );
+            }}
+          >
+            ${t("open_thermostat")}
+          </button>
+        </div>
+      </div>
+    `;
+  }
+
+  // -- settings -------------------------------------------------------------
+
+  private _navigate(path: string): void {
+    history.pushState(null, "", path);
+    window.dispatchEvent(
+      new CustomEvent("location-changed", { bubbles: true, composed: true }),
+    );
+  }
+
+  private _renderSettings(plant: Plant, colors: Map<string, string>) {
+    const t = this._t;
+    const modeState = this._state(plant.mode_entity);
+    const options: string[] = Array.isArray(modeState?.attributes.options)
+      ? modeState!.attributes.options
+      : [];
+    const row = (name: string, detail: string, warnings: string[], dot?: string) => html`
+      <li>
+        <div class="row-main">
+          <span class="row-name"
+            >${dot ? html`<span class="dot" style="background:${dot}"></span>` : nothing}${name}</span
+          >
+          <span class="row-detail">${detail}</span>
+        </div>
+        ${warnings.map((warning) => html`<div class="row-warn">${warning}</div>`)}
+      </li>
+    `;
+    const section = (title: string, rows: TemplateResult[]) => html`
+      <section class="set">
+        <h3>${title}</h3>
+        ${rows.length ? html`<ul>${rows}</ul>` : html`<p class="hint">${t("none_yet")}</p>`}
+      </section>
+    `;
+    const join = (parts: (string | false | undefined | null)[]) =>
+      parts.filter(Boolean).join(" · ");
+    return html`
+      <div class="settings">
+        <section class="set">
+          <h3>${t("set_mode")}</h3>
+          <div class="choices">
+            ${options.map(
+              (option) =>
+                html`<button
+                  class="choice ${modeState?.state === option ? "on" : ""}"
+                  @click=${() =>
+                    this._call("select", "select_option", {
+                      entity_id: plant.mode_entity,
+                      option,
+                    })}
+                >
+                  ${t(`mode_${option}` as TextKey)}
+                </button>`,
+            )}
+          </div>
+          <p class="hint">
+            ${t(modeState?.state === "off" ? "x_mode_off" : "x_mode_observe")}
+            ${t("set_mode_active")}
+          </p>
+        </section>
+        ${section(
+          t("set_sources"),
+          plant.heat_sources.map((source) =>
+            row(
+              source.name,
+              t(`kind_${source.kind}` as TextKey),
+              source.temperature_entity || source.flow_entity ? [] : [t("warn_no_sensor")],
+            ),
+          ),
+        )}
+        ${section(
+          t("set_buffers"),
+          plant.buffers.map((buffer) =>
+            row(
+              buffer.name,
+              join([
+                buffer.volume ? this._format(buffer.volume, "l", 0) : "",
+                t("n_sensors", { count: String(buffer.sensor_entities.length) }),
+              ]),
+              buffer.sensor_entities.length ? [] : [t("warn_no_sensor")],
+            ),
+          ),
+        )}
+        ${section(
+          t("set_circuits"),
+          plant.circuits.map((circuit) => {
+            const count = plant.rooms.filter((room) => room.circuit === circuit.id).length;
+            return row(
+              circuit.name,
+              join([
+                t(`system_${circuit.system_type}` as TextKey),
+                circuit.valve_entity
+                  ? t(circuit.valve_type === "no" ? "valve_no" : "valve_nc")
+                  : t("valve_none"),
+                count === 1 ? t("one_room") : t("n_rooms", { count: String(count) }),
+              ]),
+              [
+                ...(circuit.flow_entity && circuit.return_entity ? [] : [t("warn_no_pipe_sensors")]),
+                ...(count ? [] : [t("warn_no_rooms")]),
+              ],
+              colors.get(circuit.id),
+            );
+          }),
+        )}
+        ${section(
+          t("set_rooms"),
+          plant.rooms.map((room) => {
+            const circuit = plant.circuits.find((item) => item.id === room.circuit);
+            const floor = plant.floors.find((item) => item.id === room.floor);
+            return row(
+              room.name,
+              join([
+                circuit && `${t("circuit")} ${circuit.name}`,
+                floor?.name,
+                room.window_entity && t("has_window"),
+              ]),
+              [
+                ...(circuit || !plant.circuits.length ? [] : [t("warn_no_circuit")]),
+                ...(floor ? [] : [t("warn_no_floor")]),
+              ],
+              circuit ? colors.get(circuit.id) : undefined,
+            );
+          }),
+        )}
+        <section class="set">
+          <button
+            class="wide primary"
+            @click=${() => this._navigate("/config/integrations/integration/heizzentrale")}
+          >
+            ${t("edit_parts")}
+          </button>
+          <p class="hint">${t("edit_hint")}</p>
+        </section>
       </div>
     `;
   }
@@ -1185,6 +1520,262 @@ class HeizzentraleHouseCard extends LitElement {
         padding: 8px;
       }
     }
+    .chip.icon {
+      display: inline-flex;
+      align-items: center;
+      padding: 4px 8px;
+    }
+    .chip.icon svg {
+      width: 16px;
+      height: 16px;
+    }
+    .chip.icon.on {
+      background: color-mix(in srgb, var(--primary-color) 22%, transparent);
+    }
+    .backdrop {
+      position: fixed;
+      inset: 0;
+      z-index: 10;
+      background: rgba(0, 0, 0, 0.45);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 16px;
+      animation: hz-fade 0.15s ease;
+    }
+    .sheet {
+      width: min(380px, 100%);
+      max-height: 100%;
+      overflow: auto;
+      box-sizing: border-box;
+      background: var(--hz-card);
+      color: var(--primary-text-color);
+      border-radius: 22px;
+      padding: 18px;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+      box-shadow: 0 18px 50px rgba(0, 0, 0, 0.35);
+      animation: hz-rise 0.2s ease;
+    }
+    @keyframes hz-fade {
+      from {
+        opacity: 0;
+      }
+    }
+    @keyframes hz-rise {
+      from {
+        transform: translateY(14px);
+        opacity: 0;
+      }
+    }
+    @media (max-width: 500px) {
+      .backdrop {
+        align-items: flex-end;
+        padding: 0;
+      }
+      .sheet {
+        width: 100%;
+        border-radius: 22px 22px 0 0;
+        padding-bottom: calc(18px + env(safe-area-inset-bottom, 0px));
+      }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .backdrop,
+      .sheet {
+        animation: none;
+      }
+    }
+    .sheet-head {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 8px;
+    }
+    .sheet-title {
+      font-size: 1.2rem;
+      font-weight: 600;
+    }
+    .sheet-sub {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 0.8rem;
+      color: var(--hz-muted);
+      min-height: 1.1em;
+    }
+    .sheet-now {
+      display: flex;
+      align-items: baseline;
+      gap: 10px;
+    }
+    .now-value {
+      font-size: 3rem;
+      font-weight: 600;
+      letter-spacing: -0.03em;
+      line-height: 1;
+      font-variant-numeric: tabular-nums;
+    }
+    .now-label {
+      color: var(--hz-muted);
+      font-size: 0.9rem;
+    }
+    .sheet-now.heating .now-label {
+      color: var(--hz-hot);
+    }
+    .stepper {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      background: var(--hz-soft);
+      border: 1px solid var(--hz-edge);
+      border-radius: 18px;
+      padding: 8px;
+    }
+    .stepper button {
+      font: inherit;
+      font-size: 1.6rem;
+      line-height: 1;
+      width: 52px;
+      height: 52px;
+      border-radius: 14px;
+      border: 0;
+      cursor: pointer;
+      color: var(--primary-text-color);
+      background: color-mix(in srgb, var(--primary-text-color) 9%, transparent);
+    }
+    .stepper-value {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+    .stepper-value span {
+      font-size: 1.7rem;
+      font-weight: 600;
+      font-variant-numeric: tabular-nums;
+    }
+    .stepper-value small {
+      color: var(--hz-muted);
+    }
+    button:disabled {
+      opacity: 0.4;
+      cursor: default;
+    }
+    .choices {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+    }
+    .choice {
+      font: inherit;
+      font-size: 0.85rem;
+      color: var(--primary-text-color);
+      background: var(--hz-soft);
+      border: 1px solid var(--hz-edge);
+      border-radius: 999px;
+      padding: 7px 14px;
+      cursor: pointer;
+    }
+    .choice.on {
+      background: var(--primary-color);
+      border-color: var(--primary-color);
+      color: var(--text-primary-color, #fff);
+    }
+    .wide {
+      font: inherit;
+      color: var(--primary-text-color);
+      background: var(--hz-soft);
+      border: 1px solid var(--hz-edge);
+      border-radius: 14px;
+      padding: 11px;
+      cursor: pointer;
+      width: 100%;
+    }
+    .wide.primary {
+      background: var(--primary-color);
+      border-color: var(--primary-color);
+      color: var(--text-primary-color, #fff);
+      font-weight: 600;
+    }
+    .why {
+      font-size: 0.88rem;
+      line-height: 1.45;
+    }
+    .why p {
+      margin: 4px 0 0;
+    }
+    .why-title {
+      font-size: 0.68rem;
+      font-weight: 600;
+      letter-spacing: 0.09em;
+      text-transform: uppercase;
+      color: var(--hz-muted);
+    }
+    .link {
+      font: inherit;
+      font-size: 0.85rem;
+      background: none;
+      border: 0;
+      padding: 0;
+      color: var(--primary-color);
+      cursor: pointer;
+      align-self: flex-start;
+    }
+    .settings {
+      display: flex;
+      flex-direction: column;
+      gap: 18px;
+    }
+    .set h3 {
+      margin: 0 0 8px;
+      font-size: 0.68rem;
+      font-weight: 600;
+      letter-spacing: 0.09em;
+      text-transform: uppercase;
+      color: var(--hz-muted);
+    }
+    .set ul {
+      list-style: none;
+      margin: 0;
+      padding: 0;
+      background: var(--hz-soft);
+      border: 1px solid var(--hz-edge);
+      border-radius: 14px;
+    }
+    .set li {
+      padding: 10px 12px;
+    }
+    .set li + li {
+      border-top: 1px solid var(--hz-edge);
+    }
+    .row-main {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+    .row-name {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-weight: 500;
+    }
+    .row-detail {
+      font-size: 0.8rem;
+      color: var(--hz-muted);
+    }
+    .row-warn {
+      margin-top: 4px;
+      font-size: 0.8rem;
+      color: color-mix(in srgb, var(--hz-warn) 75%, var(--primary-text-color));
+    }
+    .hint {
+      margin: 8px 0 0;
+      font-size: 0.82rem;
+      line-height: 1.4;
+      color: var(--hz-muted);
+    }
     .explain {
       background: var(--hz-tile);
       border-radius: 14px;
@@ -1216,6 +1807,8 @@ class HeizzentraleHouseCard extends LitElement {
 // ---------------------------------------------------------------------------
 
 const ICON_FLAME = svg`<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2c1 3.5-1.5 5-2.5 7C8.4 11 9 12.5 9 12.5S7 12 6.6 9.8C4.9 11.600 4 13.700 4 15.500 4 19.100 7.600 22 12 22s8-2.900 8-6.500C20 10.500 14.500 8 12 2z"/></svg>`;
+const ICON_GEAR = svg`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.800 2.800l-.1-.1a1.700 1.700 0 0 0-1.800-.3 1.700 1.700 0 0 0-1 1.500V21a2 2 0 1 1-4 0v-.1a1.700 1.700 0 0 0-1.100-1.500 1.700 1.700 0 0 0-1.800.3l-.1.1a2 2 0 1 1-2.800-2.800l.1-.1a1.700 1.700 0 0 0 .3-1.800 1.700 1.700 0 0 0-1.500-1H3a2 2 0 1 1 0-4h.1a1.700 1.700 0 0 0 1.500-1.100 1.700 1.700 0 0 0-.3-1.800l-.1-.1a2 2 0 1 1 2.800-2.800l.1.1a1.700 1.700 0 0 0 1.800.3h.1a1.700 1.700 0 0 0 1-1.500V3a2 2 0 1 1 4 0v.1a1.700 1.700 0 0 0 1 1.500 1.700 1.700 0 0 0 1.800-.3l.1-.1a2 2 0 1 1 2.800 2.800l-.1.1a1.700 1.700 0 0 0-.3 1.800v.1a1.700 1.700 0 0 0 1.500 1H21a2 2 0 1 1 0 4h-.1a1.700 1.700 0 0 0-1.500 1z"/></svg>`;
+const ICON_HOME = svg`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 11.5 12 4l9 7.500"/><path d="M5.500 10v10h13V10"/></svg>`;
 const ICON_WINDOW = svg`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="4" y="3" width="16" height="18" rx="1.5"/><path d="M12 3v18M4 12h16"/></svg>`;
 
 // Gable roof with chimney. Stretched to the card width; strokes keep their width.

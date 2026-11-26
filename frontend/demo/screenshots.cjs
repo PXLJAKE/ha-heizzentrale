@@ -9,7 +9,11 @@ const { chromium } = require("playwright");
   const jobs = [
     ["hausansicht-tablet-hell", { width: 1024, height: 900 }, ""],
     ["hausansicht-tablet-dunkel", { width: 1024, height: 900 }, "?theme=dark&select=circuit:og"],
-    ["hausansicht-handy", { width: 390, height: 844 }, "?select=room:r4"],
+    ["hausansicht-handy", { width: 390, height: 844 }, ""],
+    ["raum-angeklickt", { width: 1024, height: 900 }, "?select=room:r4"],
+    ["raum-angeklickt-handy", { width: 390, height: 844 }, "?select=room:r9"],
+    ["einstellungen", { width: 1024, height: 900 }, "?view=settings"],
+    ["einstellungen-handy-dunkel", { width: 390, height: 844 }, "?view=settings&theme=dark"],
   ];
   const browser = await chromium.launch();
   for (const [name, viewport, query] of jobs) {
@@ -20,7 +24,7 @@ const { chromium } = require("playwright");
     });
     await page.goto(base + query);
     await page.waitForTimeout(900);
-    await page.screenshot({ path: `${out}/${name}.png`, fullPage: true });
+    await page.screenshot({ path: `${out}/${name}.png`, fullPage: !name.startsWith("raum") });
     await page.close();
   }
   await browser.close();

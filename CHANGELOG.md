@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.5.0-beta.1
+
+- Tapping a room opens a room window: change the setpoint, pick a preset,
+  switch the room off or on, read what is happening and why, and jump to the
+  thermostat details.
+- Settings view in the card (gear button): switch the operating mode, see
+  all heat sources, buffers, circuits and rooms with what is assigned, get
+  hints for missing sensors, circuits or floors, and jump to the page where
+  parts are added and changed.
+- Preset names are shown in the language of Home Assistant.
+
 ## 0.4.0-beta.1
 
 - Floors come from Home Assistant: a room appears on the floor of the area
