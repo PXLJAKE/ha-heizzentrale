@@ -391,10 +391,11 @@ class ControlEngine:
         circuits: dict[str, dict[str, Any]] = {}
         for circuit in plant["circuits"]:
             cid = circuit["id"]
+            # A room without a thermostat cannot be read: its strand stays open.
             readings = [
                 self._reading(room)
                 for room in plant["rooms"]
-                if room.get("circuit") == cid and room.get("climate_entity")
+                if room.get("circuit") == cid
             ]
             valve = circuit.get("valve_entity")
             state = self.hass.states.get(valve) if valve else None
@@ -416,13 +417,28 @@ class ControlEngine:
                 "action": advice.action,
                 "rooms": advice.rooms,
             }
+        # Rooms that hang on no strand still need the pump: they count for
+        # every pump group, with the same wait as a strand.
+        loose = [
+            self._reading(room)
+            for room in plant["rooms"]
+            if room.get("circuit") not in circuits and room.get("climate_entity")
+        ]
+        loose_wanted: list[bool] = []
+        if loose:
+            idle = (now - self._idle_since.setdefault("", now)).total_seconds() / 60
+            advice = circuit_advice(loose, True, False, idle)
+            if advice.reason != "waiting" and advice.wanted:
+                self._idle_since[""] = now
+            loose_wanted = [advice.wanted]
         groups: dict[str, dict[str, Any]] = {}
         for group in plant["pump_groups"]:
+            # A strand without a pump group counts for every one of them.
             wanted = [
                 circuits[c["id"]]["wanted"]
                 for c in plant["circuits"]
-                if c.get("pump_group") == group["id"]
-            ]
+                if c.get("pump_group") in (group["id"], None)
+            ] + loose_wanted
             advice = pump_advice(
                 wanted, self._pump_is_on(group), bool(group.get("control_entity"))
             )

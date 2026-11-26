@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.13.2-beta.1
+
+- Safety: rooms that hang on no circuit, and circuits without a pump group,
+  now count as demand for the pump group. Before, the pump group could be
+  switched off while such a room still asked for heat.
+
 ## 0.13.1-beta.1
 
 - Switching "Apply" off now hands the thermostats back: rooms an absence
