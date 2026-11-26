@@ -1,0 +1,4 @@
+# Pinned test tooling. pytest-homeassistant-custom-component pins the matching
+# Home Assistant version (0.13.316 -> Home Assistant 2026.2.3).
+pytest-homeassistant-custom-component==0.13.316
+ruff==0.17.6

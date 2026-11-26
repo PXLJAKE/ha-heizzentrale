@@ -1,0 +1,12 @@
+{
+  "domain": "heizzentrale",
+  "name": "Heizzentrale",
+  "codeowners": ["@PXLJAKE"],
+  "config_flow": true,
+  "documentation": "https://github.com/PXLJAKE/ha-heizzentrale",
+  "integration_type": "hub",
+  "iot_class": "calculated",
+  "issue_tracker": "https://github.com/PXLJAKE/ha-heizzentrale/issues",
+  "requirements": [],
+  "version": "0.1.0"
+}

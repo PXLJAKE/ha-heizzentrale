@@ -1,0 +1,42 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Set up your heating plant",
+        "description": "Heizzentrale starts in observe mode: it only measures and explains, it does not switch anything.",
+        "data": {
+          "name": "Name of the plant",
+          "outdoor_temperature_entity": "Outdoor temperature sensor"
+        },
+        "data_description": {
+          "name": "Shown in Home Assistant, for example \"Heating\" or the name of your house.",
+          "outdoor_temperature_entity": "Optional. Used later for frost protection and for the evaluation. You can add it at any time."
+        }
+      },
+      "reconfigure": {
+        "title": "Change plant settings",
+        "data": {
+          "outdoor_temperature_entity": "Outdoor temperature sensor"
+        },
+        "data_description": {
+          "outdoor_temperature_entity": "Optional. Used later for frost protection and for the evaluation."
+        }
+      }
+    },
+    "abort": {
+      "already_configured": "A plant with this name already exists.",
+      "reconfigure_successful": "Settings saved."
+    }
+  },
+  "entity": {
+    "select": {
+      "operating_mode": {
+        "name": "Operating mode",
+        "state": {
+          "off": "Off",
+          "observe": "Observe"
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,42 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Heizungsanlage einrichten",
+        "description": "Heizzentrale startet im Beobachtungsmodus: Sie misst und erklärt nur, geschaltet wird nichts.",
+        "data": {
+          "name": "Name der Anlage",
+          "outdoor_temperature_entity": "Außentemperaturfühler"
+        },
+        "data_description": {
+          "name": "Wird in Home Assistant angezeigt, zum Beispiel \"Heizung\" oder der Name deines Hauses.",
+          "outdoor_temperature_entity": "Optional. Wird später für den Frostschutz und die Auswertung genutzt. Du kannst ihn jederzeit nachtragen."
+        }
+      },
+      "reconfigure": {
+        "title": "Einstellungen der Anlage ändern",
+        "data": {
+          "outdoor_temperature_entity": "Außentemperaturfühler"
+        },
+        "data_description": {
+          "outdoor_temperature_entity": "Optional. Wird später für den Frostschutz und die Auswertung genutzt."
+        }
+      }
+    },
+    "abort": {
+      "already_configured": "Eine Anlage mit diesem Namen gibt es schon.",
+      "reconfigure_successful": "Einstellungen gespeichert."
+    }
+  },
+  "entity": {
+    "select": {
+      "operating_mode": {
+        "name": "Betriebsmodus",
+        "state": {
+          "off": "Aus",
+          "observe": "Beobachten"
+        }
+      }
+    }
+  }
+}
