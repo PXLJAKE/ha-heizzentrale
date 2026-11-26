@@ -2,7 +2,7 @@
 
 !!! warning "Beta"
     Heizzentrale ist in Entwicklung. Diese Seite beschreibt den Stand der
-    Version 0.11.
+    Version 0.12.
 
 ## Das gibt es
 
@@ -16,6 +16,7 @@
 - Stränge und Pumpengruppe wirklich schalten (Modus „Schaltet“)
 - Offene Fenster schalten den Raum aus
 - Frostschutz: kalte Räume halten ihren Strang offen
+- Vorlauf nach Bedarf: die Heizkurve in kleinen Schritten nachstellen
 - Deutsch und Englisch
 
 ## Das ist geplant

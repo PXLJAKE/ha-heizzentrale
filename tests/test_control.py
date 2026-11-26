@@ -512,3 +512,104 @@ async def test_open_window_switches_room_off_and_back(
     hass.states.async_set("binary_sensor.bad_fenster", "on")
     await control.async_run()
     assert calls == []
+
+
+async def test_flow_by_demand_shows_then_applies_and_hands_back(
+    hass: HomeAssistant, freezer: FrozenDateTimeFactory
+) -> None:
+    _, control = await _switching_plant(hass)
+    made: list[float] = []
+
+    async def handle(call: ServiceCall) -> None:
+        made.append(call.data["value"])
+        hass.states.async_set(
+            call.data["entity_id"], str(call.data["value"]), {"min": 0, "max": 100}
+        )
+
+    hass.services.async_register("input_number", "set_value", handle)
+    hass.states.async_set("input_number.kurve", "22", {"min": 0, "max": 100})
+    # The room asks for heat and stays a whole degree too cold.
+    hass.states.async_set(
+        "climate.bad",
+        "heat",
+        {
+            **ATTRS,
+            "hvac_action": "heating",
+            "temperature": 22,
+            "current_temperature": 20,
+        },
+    )
+    settings = {
+        "entity": "input_number.kurve",
+        "min": 20.0,
+        "max": 23.0,
+        "step": 0.5,
+        "apply": False,
+    }
+    await control.async_save(flow=settings)
+    for _ in range(25):
+        freezer.tick(timedelta(minutes=4))
+        await control.async_run()
+    flow = control.payload()["flow"]
+    assert (flow["reason"], flow["target"], flow["rooms"]) == ("lagging", 22.5, ["Bad"])
+    assert made == []  # only shown
+
+    await control.async_save(flow={**settings, "apply": True})
+    assert made == [22.5]
+    # Right after a change it waits before raising again.
+    freezer.tick(timedelta(minutes=10))
+    await control.async_run()
+    assert made == [22.5]
+    assert control.payload()["flow"]["reason"] == "waiting"
+
+    # Switching it off puts the number back to where it was.
+    await control.async_save(flow={**settings, "apply": False})
+    assert made == [22.5, 22.0]
+    assert control.payload()["flow"]["base"] is None
+
+
+async def test_flow_by_demand_lowers_slowly_when_demand_is_covered(
+    hass: HomeAssistant, freezer: FrozenDateTimeFactory
+) -> None:
+    _, control = await _switching_plant(hass)
+    made: list[float] = []
+
+    async def handle(call: ServiceCall) -> None:
+        made.append(call.data["value"])
+        hass.states.async_set(call.data["entity_id"], str(call.data["value"]))
+
+    hass.services.async_register("input_number", "set_value", handle)
+    hass.states.async_set("input_number.kurve", "22")
+    hass.states.async_set(
+        "climate.bad",
+        "heat",
+        {
+            **ATTRS,
+            "hvac_action": "heating",
+            "temperature": 22,
+            "current_temperature": 21.8,
+        },
+    )
+    await control.async_save(
+        flow={
+            "entity": "input_number.kurve",
+            "min": 21.5,
+            "max": 23.0,
+            "step": 0.5,
+            "apply": True,
+        }
+    )
+    for _ in range(59):
+        freezer.tick(timedelta(minutes=4))
+        await control.async_run()
+    assert made == []
+    for _ in range(3):
+        freezer.tick(timedelta(minutes=4))
+        await control.async_run()
+    assert made == [21.5]
+    # It never goes below the limit.
+    for _ in range(140):
+        freezer.tick(timedelta(minutes=4))
+        await control.async_run()
+    assert made == [21.5]
+    assert control.payload()["flow"]["reason"] == "at_min"

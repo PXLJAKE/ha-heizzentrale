@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.12.0-beta.1
+
+- Flow temperature by demand: Heizzentrale can nudge one number of the heat
+  source that shifts the heating curve. One step up when a room that asks
+  for heat stays more than 0.5 K too cold for 90 minutes, one step down
+  after four hours in which demand was covered. Fixed limits, "Only show" by
+  default, and the number is put back when applying is switched off.
+
 ## 0.11.0-beta.1
 
 - New operating mode "Switching": Heizzentrale closes circuits no room needs

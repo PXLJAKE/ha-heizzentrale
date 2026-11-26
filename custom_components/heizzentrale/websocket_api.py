@@ -53,6 +53,7 @@ from .const import (
     ValveType,
 )
 from .control import RULES_SCHEMA, SCHEDULES_SCHEMA, STOVES_SCHEMA, WINDOW_SCHEMA
+from .flow import FLOW_SCHEMA
 from .manager import PlantManager
 
 
@@ -414,6 +415,7 @@ def ws_control_get(
         vol.Optional("rules"): RULES_SCHEMA,
         vol.Optional("stoves"): STOVES_SCHEMA,
         vol.Optional("window"): WINDOW_SCHEMA,
+        vol.Optional("flow"): FLOW_SCHEMA,
     }
 )
 @websocket_api.async_response
@@ -431,6 +433,7 @@ async def ws_control_save(
         msg.get("rules"),
         msg.get("stoves"),
         msg.get("window"),
+        msg.get("flow"),
     )
     connection.send_result(msg["id"], manager.control.payload())
 

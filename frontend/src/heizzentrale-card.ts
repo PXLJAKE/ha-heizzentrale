@@ -1812,6 +1812,7 @@ class HeizzentraleHouseCard extends LitElement {
               .plant=${plant}
               .control=${this._control}
               .t=${t}
+              .language=${this._language}
               @control-changed=${(event: CustomEvent<Control>) => (this._control = event.detail)}
             ></heizzentrale-control>`
           : nothing}

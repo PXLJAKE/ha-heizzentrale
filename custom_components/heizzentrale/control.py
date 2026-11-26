@@ -31,6 +31,7 @@ from homeassistant.util import dt as dt_util
 
 from .const import CONF_CONTROL_OFF, CONF_CONTROL_ON, OperatingMode
 from .demand import RoomReading, circuit_advice, pump_advice
+from .flow import FlowControl
 from .model import circuit_open, parse_float
 from .scheduling import (
     SOURCE_SCHEDULE,
@@ -158,6 +159,7 @@ class ControlEngine:
         self.rules: list[dict[str, Any]] = []
         self.stoves: list[dict[str, Any]] = []
         self.window: dict[str, Any] = dict(DEFAULT_WINDOW)
+        self.flow = FlowControl(hass, manager)
         # Thermostat state before an open window switched it off, per room.
         self._window_saved: dict[str, dict[str, Any]] = {}
         # Strands the engine closed and pump groups it switched off.
@@ -189,6 +191,7 @@ class ControlEngine:
         self.rules = list(data.get("rules", []))
         self.stoves = list(data.get("stoves", []))
         self.window = {**DEFAULT_WINDOW, **data.get("window", {})}
+        self.flow.load(data.get("flow", {}))
         self._window_saved = dict(data.get("window_saved", {}))
         self._switched = dict(data.get("switched", {}))
         self._burning = list(data.get("burning", []))
@@ -204,6 +207,7 @@ class ControlEngine:
             "rules": self.rules,
             "stoves": self.stoves,
             "window": self.window,
+            "flow": self.flow.dump(),
             "window_saved": self._window_saved,
             "switched": self._switched,
             "burning": self._burning,
@@ -279,6 +283,7 @@ class ControlEngine:
         rules: list[dict[str, Any]] | None = None,
         stoves: list[dict[str, Any]] | None = None,
         window: dict[str, Any] | None = None,
+        flow: dict[str, Any] | None = None,
     ) -> None:
         """Store changed settings and apply them right away."""
         if enabled is not None:
@@ -291,6 +296,8 @@ class ControlEngine:
             self.stoves = stoves
         if window is not None:
             self.window = window
+        if flow is not None:
+            await self.flow.async_save(flow)
         self._track_entities()
         await self._manager.async_save()
         await self.async_run()
@@ -471,6 +478,14 @@ class ControlEngine:
                     }
             self._status = status
             changed |= await self._async_switch(plant)
+            changed |= await self.flow.async_run(
+                [
+                    (room["id"], self._reading(room))
+                    for room in plant["rooms"]
+                    if room.get("climate_entity")
+                ],
+                now,
+            )
             if changed:
                 await self._manager.async_save()
 
@@ -722,6 +737,7 @@ class ControlEngine:
             "rules": self.rules,
             "stoves": self.stoves,
             "window": self.window,
+            "flow": self.flow.payload(),
             "switching": self._switching(),
             "switched": self._switched,
             "active_rules": self._active,
