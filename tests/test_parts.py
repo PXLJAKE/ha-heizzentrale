@@ -252,3 +252,34 @@ async def test_websocket_describes_plant(
     assert circuit["open_entity"] == "binary_sensor.eg_open"
     assert plant["heat_sources"][0]["kind"] == "pellet"
     assert {room["name"] for room in plant["rooms"]} == {"Bad", "Saal"}
+
+
+async def test_floor_comes_from_thermostat_area(
+    hass: HomeAssistant, hass_ws_client: WebSocketGenerator
+) -> None:
+    """Without a chosen floor the area of the thermostat decides."""
+    from homeassistant.helpers import area_registry as ar
+    from homeassistant.helpers import entity_registry as er
+
+    attic = fr.async_get(hass).async_create("DG", level=2)
+    area = ar.async_get(hass).async_create("Bad oben", floor_id=attic.floor_id)
+    registry = er.async_get(hass)
+    item = registry.async_get_or_create("climate", "test", "bad")
+    registry.async_update_entity(item.entity_id, area_id=area.id)
+    entry = _entry(
+        {
+            "type": "room",
+            "data": {CONF_NAME: "Bad", "climate_entity": item.entity_id},
+        },
+        {
+            "type": "room",
+            "data": {CONF_NAME: "Flur", "climate_entity": "climate.unknown"},
+        },
+    )
+    await _setup(hass, entry)
+    client = await hass_ws_client(hass)
+    await client.send_json_auto_id({"type": "heizzentrale/plants"})
+    (plant,) = (await client.receive_json())["result"]["plants"]
+    assert [floor["name"] for floor in plant["floors"]] == ["DG"]
+    rooms = {room["name"]: room["floor"] for room in plant["rooms"]}
+    assert rooms == {"Bad": attic.floor_id, "Flur": None}

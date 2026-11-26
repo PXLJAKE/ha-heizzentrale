@@ -14,6 +14,8 @@ from homeassistant.components import websocket_api
 from homeassistant.config_entries import ConfigEntryState
 from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant, callback
+from homeassistant.helpers import area_registry as ar
+from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers import floor_registry as fr
 
@@ -60,6 +62,22 @@ def async_describe_plants(hass: HomeAssistant) -> list[dict[str, Any]]:
     """Describe all loaded plants for the card."""
     registry = er.async_get(hass)
     floors = fr.async_get(hass)
+    areas = ar.async_get(hass)
+    devices = dr.async_get(hass)
+
+    def floor_of(*entity_ids: str | None) -> str | None:
+        """Floor of the first entity whose area sits on a floor."""
+        for entity_id in entity_ids:
+            if not entity_id or (item := registry.async_get(entity_id)) is None:
+                continue
+            area_id = item.area_id
+            if area_id is None and item.device_id:
+                device = devices.async_get(item.device_id)
+                area_id = device.area_id if device else None
+            area = areas.async_get_area(area_id) if area_id else None
+            if area is not None and area.floor_id:
+                return area.floor_id
+        return None
 
     def own(platform: Platform, unique_id: str) -> str | None:
         return registry.async_get_entity_id(platform, DOMAIN, unique_id)
@@ -118,7 +136,11 @@ def async_describe_plants(hass: HomeAssistant) -> list[dict[str, Any]]:
                     }
                 )
             elif subentry.subentry_type == SUBENTRY_ROOM:
-                floor_id = data.get(CONF_FLOOR)
+                # A floor picked by hand wins; otherwise the floor comes from
+                # the area of the thermostat or the window contact.
+                floor_id = data.get(CONF_FLOOR) or floor_of(
+                    data.get(CONF_CLIMATE), data.get(CONF_WINDOW)
+                )
                 if floor_id:
                     floor_ids.add(floor_id)
                 plant["rooms"].append(
