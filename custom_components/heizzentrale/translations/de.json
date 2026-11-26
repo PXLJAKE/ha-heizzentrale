@@ -44,6 +44,15 @@
       },
       "buffer_mean": {
         "name": "Mittlere Temperatur"
+      },
+      "balancing": {
+        "name": "Hydraulischer Abgleich",
+        "state": {
+          "not_enough_circuits": "Zu wenige offene Stränge",
+          "settling": "Misst noch",
+          "adjust": "Anpassung empfohlen",
+          "balanced": "Abgeglichen"
+        }
       }
     },
     "binary_sensor": {

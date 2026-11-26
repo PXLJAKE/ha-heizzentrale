@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased
+
+- Balancing assistant, backend: sensor calibration (offsets so all pipe
+  sensors agree), 30 minute spread averages with a settling check, analysis
+  of all open circuits and one recommended valve step per round, log of
+  manual adjustments. New sensor "Balancing" on the plant.
+- Calibration offsets and the adjustment log are stored per plant and removed
+  with it. Disk writes only happen on calibration or a logged adjustment.
+
 ## 0.2.0-beta.1
 
 - Measuring: heat sources, buffer tanks, circuits and rooms can be added,
