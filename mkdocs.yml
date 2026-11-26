@@ -1,0 +1,71 @@
+site_name: Heizzentrale
+site_url: https://pxljake.com/projects/Heizzentrale/
+site_description: Home-Assistant-Integration für wassergeführte Heizungen
+repo_url: https://github.com/PXLJAKE/ha-heizzentrale
+repo_name: PXLJAKE/ha-heizzentrale
+edit_uri: ""
+copyright: Apache-2.0
+# Pages end in .html so the built site also works from a ZIP or a plain
+# web space without server rules.
+use_directory_urls: false
+
+theme:
+  name: material
+  language: de
+  custom_dir: docs/overrides
+  # No fonts from Google: nothing is loaded from other servers.
+  font: false
+  icon:
+    logo: material/radiator
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: deep orange
+      accent: deep orange
+      toggle:
+        icon: material/weather-night
+        name: Dunkles Design
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: deep orange
+      accent: deep orange
+      toggle:
+        icon: material/weather-sunny
+        name: Helles Design
+  features:
+    - navigation.sections
+    - navigation.footer
+    - navigation.top
+    - content.code.copy
+    - announce.dismiss
+
+plugins:
+  - search:
+      lang: de
+
+markdown_extensions:
+  - admonition
+  - attr_list
+  - md_in_html
+  - tables
+  - pymdownx.details
+  - pymdownx.superfences
+  - toc:
+      permalink: true
+
+nav:
+  - Start: index.md
+  - Loslegen:
+      - Installation: installation.md
+      - Einrichtung: einrichtung.md
+  - Bedienen:
+      - Hausansicht: hausansicht.md
+      - Zeitpläne: zeitplaene.md
+      - Abwesenheit: abwesenheit.md
+      - Öfen: oefen.md
+  - Verstehen:
+      - Was würde geschaltet: schalten.md
+      - Sicherheit: sicherheit.md
+  - Hilfe:
+      - Fragen und Fehlersuche: hilfe.md
+      - Stand und Ausblick: stand.md
