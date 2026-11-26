@@ -44,6 +44,15 @@
       },
       "buffer_mean": {
         "name": "Mean temperature"
+      },
+      "balancing": {
+        "name": "Balancing",
+        "state": {
+          "not_enough_circuits": "Not enough open circuits",
+          "settling": "Measuring",
+          "adjust": "Adjustment recommended",
+          "balanced": "Balanced"
+        }
       }
     },
     "binary_sensor": {
