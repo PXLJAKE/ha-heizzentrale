@@ -359,3 +359,49 @@ async def test_room_name_and_circuit_are_filled_in(hass: HomeAssistant) -> None:
         result["flow_id"], {"climate_entity": "climate.gaeste_bad"}
     )
     assert result["title"] == "Gaeste Bad"
+
+
+async def test_pump_group_with_mode_select(hass: HomeAssistant) -> None:
+    """A select as control entity asks which mode is off and which is on."""
+    hass.states.async_set(
+        "select.hk1_mode", "1_auto", {"options": ["0_aus", "1_auto", "2_heizen"]}
+    )
+    entry = _entry(CIRCUIT)
+    await _setup(hass, entry)
+    result = await hass.config_entries.subentries.async_init(
+        (entry.entry_id, "pump_group"), context={"source": SOURCE_USER}
+    )
+    result = await hass.config_entries.subentries.async_configure(
+        result["flow_id"],
+        {CONF_NAME: "Mischerkreis", "control_entity": "select.hk1_mode"},
+    )
+    assert result["type"] is FlowResultType.FORM
+    assert result["step_id"] == "control_options"
+
+    same = {"control_off_option": "0_aus", "control_on_option": "0_aus"}
+    result = await hass.config_entries.subentries.async_configure(
+        result["flow_id"], same
+    )
+    assert result["errors"] == {"base": "same_option"}
+
+    result = await hass.config_entries.subentries.async_configure(
+        result["flow_id"],
+        {"control_off_option": "0_aus", "control_on_option": "1_auto"},
+    )
+    assert result["type"] is FlowResultType.CREATE_ENTRY
+    assert result["data"]["control_off_option"] == "0_aus"
+    assert result["data"]["control_on_option"] == "1_auto"
+
+
+async def test_pump_group_with_switch_skips_modes(hass: HomeAssistant) -> None:
+    """A plain switch needs no second question."""
+    entry = _entry(CIRCUIT)
+    await _setup(hass, entry)
+    result = await hass.config_entries.subentries.async_init(
+        (entry.entry_id, "pump_group"), context={"source": SOURCE_USER}
+    )
+    result = await hass.config_entries.subentries.async_configure(
+        result["flow_id"], {CONF_NAME: "Pumpe", "control_entity": "switch.pumpe"}
+    )
+    assert result["type"] is FlowResultType.CREATE_ENTRY
+    assert "control_off_option" not in result["data"]

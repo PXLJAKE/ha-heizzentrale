@@ -65,6 +65,8 @@ interface PumpGroup {
   return_entity?: string | null;
   status_entity?: string | null;
   control_entity?: string | null;
+  control_off_option?: string | null;
+  control_on_option?: string | null;
 }
 
 interface Plant {
@@ -883,6 +885,10 @@ class HeizzentraleHouseCard extends LitElement {
       if (running !== undefined)
         lines.push(t(running ? "x_pump_running" : "x_pump_stopped"));
       lines.push(t(group.control_entity ? "x_pump_control" : "x_pump_no_control"));
+      if (group.control_off_option && group.control_on_option)
+        lines.push(
+          t("x_pump_modes", { off: group.control_off_option, on: group.control_on_option }),
+        );
     } else if (selection.kind === "buffer") {
       const buffer = plant.buffers.find((item) => item.id === selection.id);
       if (!buffer) return undefined;

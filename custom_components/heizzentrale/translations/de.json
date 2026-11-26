@@ -172,7 +172,7 @@
             "flow_entity": "Fühler hinter dem Mischer: die Temperatur des Wassers, das zu den Strängen geht.",
             "return_entity": "Fühler am gemeinsamen Rücklauf.",
             "status_entity": "Eine Entität, die zeigt, ob die Pumpe läuft.",
-            "control_entity": "Die Entität, die diese Pumpengruppe oder ihren Heizkreis ein- und ausschaltet. Heizzentrale schaltet sie noch nicht; sie wird benutzt, sobald das Schalten freigegeben ist."
+            "control_entity": "Die Entität, die diese Pumpengruppe oder ihren Heizkreis ein- und ausschaltet. Ein Schalter geht, ebenso eine Auswahl mit Modi wie Aus und Auto. Heizzentrale schaltet sie noch nicht."
           }
         },
         "reconfigure": {
@@ -190,12 +190,27 @@
             "flow_entity": "Fühler hinter dem Mischer: die Temperatur des Wassers, das zu den Strängen geht.",
             "return_entity": "Fühler am gemeinsamen Rücklauf.",
             "status_entity": "Eine Entität, die zeigt, ob die Pumpe läuft.",
-            "control_entity": "Die Entität, die diese Pumpengruppe oder ihren Heizkreis ein- und ausschaltet. Heizzentrale schaltet sie noch nicht; sie wird benutzt, sobald das Schalten freigegeben ist."
+            "control_entity": "Die Entität, die diese Pumpengruppe oder ihren Heizkreis ein- und ausschaltet. Ein Schalter geht, ebenso eine Auswahl mit Modi wie Aus und Auto. Heizzentrale schaltet sie noch nicht."
+          }
+        },
+        "control_options": {
+          "title": "Wie wird geschaltet?",
+          "description": "{entity} hat mehrere Modi. Sag Heizzentrale, welcher Modus die Pumpengruppe ausschaltet und welcher sie wieder einschaltet. Geschaltet wird noch nichts; das wird benutzt, sobald das Schalten freigegeben ist.",
+          "data": {
+            "control_off_option": "Modus für Aus",
+            "control_on_option": "Modus für An"
+          },
+          "data_description": {
+            "control_off_option": "Der Modus, in dem dieser Heizkreis nicht heizt.",
+            "control_on_option": "Der Modus für den normalen Betrieb, meistens Automatik."
           }
         }
       },
       "abort": {
         "reconfigure_successful": "Gespeichert."
+      },
+      "error": {
+        "same_option": "Aus und An müssen zwei verschiedene Modi sein."
       }
     },
     "circuit": {

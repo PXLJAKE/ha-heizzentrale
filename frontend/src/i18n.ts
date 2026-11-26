@@ -118,6 +118,7 @@ const en = {
   x_pump_stopped: "The pump reports that it is stopped.",
   x_pump_control:
     "An entity to switch it is chosen. Heizzentrale only observes for now and does not use it yet.",
+  x_pump_modes: "Off is the mode “{off}”, on is the mode “{on}”.",
   x_pump_no_control: "No entity to switch it is chosen yet.",
   setup_title: "Setup",
   setup_intro:
@@ -260,6 +261,7 @@ const de: typeof en = {
   x_pump_stopped: "Die Pumpe meldet, dass sie steht.",
   x_pump_control:
     "Eine Entität zum Schalten ist gewählt. Heizzentrale beobachtet vorerst nur und benutzt sie noch nicht.",
+  x_pump_modes: "Aus ist der Modus „{off}“, An ist der Modus „{on}“.",
   x_pump_no_control: "Es ist noch keine Entität zum Schalten gewählt.",
   setup_title: "Einrichtung",
   setup_intro:

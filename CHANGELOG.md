@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.6.1-beta.1
+
+- Pump group: the entity that switches it can be a selection with modes
+  (for example the heating circuit mode of a boiler). The setup then asks
+  which mode means off and which means on, with the real modes to pick from.
+
 ## 0.6.0-beta.1
 
 - New part "Pump group": the pump, with or without mixer, that feeds one or

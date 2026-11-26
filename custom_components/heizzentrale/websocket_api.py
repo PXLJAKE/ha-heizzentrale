@@ -25,6 +25,8 @@ from .const import (
     CONF_CIRCUIT,
     CONF_CLIMATE,
     CONF_CONTROL,
+    CONF_CONTROL_OFF,
+    CONF_CONTROL_ON,
     CONF_FLOOR,
     CONF_FLOW,
     CONF_KIND,
@@ -131,6 +133,8 @@ def async_describe_plants(hass: HomeAssistant) -> list[dict[str, Any]]:
                         "return_entity": data.get(CONF_RETURN),
                         "status_entity": data.get(CONF_STATUS),
                         "control_entity": data.get(CONF_CONTROL),
+                        "control_off_option": data.get(CONF_CONTROL_OFF),
+                        "control_on_option": data.get(CONF_CONTROL_ON),
                     }
                 )
             elif subentry.subentry_type == SUBENTRY_CIRCUIT:
