@@ -42,6 +42,8 @@ from .const import (
     CONF_VOLUME,
     CONF_WINDOW,
     DOMAIN,
+    LANGUAGES,
+    OPT_LANGUAGE,
     SUBENTRY_BUFFER,
     SUBENTRY_CIRCUIT,
     SUBENTRY_HEAT_SOURCE,
@@ -56,10 +58,18 @@ from .manager import PlantManager
 def async_register_websocket_api(hass: HomeAssistant) -> None:
     """Register the websocket commands."""
     websocket_api.async_register_command(hass, ws_plants)
+    websocket_api.async_register_command(hass, ws_set_language)
     websocket_api.async_register_command(hass, ws_balancing_status)
     websocket_api.async_register_command(hass, ws_balancing_calibrate)
     websocket_api.async_register_command(hass, ws_balancing_clear_calibration)
     websocket_api.async_register_command(hass, ws_balancing_log)
+
+
+def as_list(value: Any) -> list[str]:
+    """Entity ids as a list; older entries stored a single id."""
+    if not value:
+        return []
+    return [value] if isinstance(value, str) else list(value)
 
 
 @callback
@@ -92,6 +102,7 @@ def async_describe_plants(hass: HomeAssistant) -> list[dict[str, Any]]:
         plant: dict[str, Any] = {
             "entry_id": entry.entry_id,
             "name": entry.title,
+            "language": entry.options.get(OPT_LANGUAGE, "auto"),
             "mode_entity": own(Platform.SELECT, f"{entry.entry_id}_operating_mode"),
             "balancing_entity": own(Platform.SENSOR, f"{entry.entry_id}_balancing"),
             "outdoor_entity": entry.data.get(CONF_OUTDOOR_TEMPERATURE),
@@ -158,7 +169,7 @@ def async_describe_plants(hass: HomeAssistant) -> list[dict[str, Any]]:
                 # A floor picked by hand wins; otherwise the floor comes from
                 # the area of the thermostat or the window contact.
                 floor_id = data.get(CONF_FLOOR) or floor_of(
-                    data.get(CONF_CLIMATE), data.get(CONF_WINDOW)
+                    data.get(CONF_CLIMATE), *as_list(data.get(CONF_WINDOW))
                 )
                 if floor_id:
                     floor_ids.add(floor_id)
@@ -166,7 +177,7 @@ def async_describe_plants(hass: HomeAssistant) -> list[dict[str, Any]]:
                     base
                     | {
                         "climate_entity": data.get(CONF_CLIMATE),
-                        "window_entity": data.get(CONF_WINDOW),
+                        "window_entities": as_list(data.get(CONF_WINDOW)),
                         "circuit": data.get(CONF_CIRCUIT),
                         "floor": floor_id,
                     }
@@ -199,6 +210,31 @@ def ws_plants(
 ) -> None:
     """Return the structure of all plants."""
     connection.send_result(msg["id"], {"plants": async_describe_plants(hass)})
+
+
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): "heizzentrale/set_language",
+        vol.Required("entry_id"): str,
+        vol.Required("language"): vol.In(LANGUAGES),
+    }
+)
+@websocket_api.require_admin
+@callback
+def ws_set_language(
+    hass: HomeAssistant,
+    connection: websocket_api.ActiveConnection,
+    msg: dict[str, Any],
+) -> None:
+    """Choose the language of the house view for one plant."""
+    entry = hass.config_entries.async_get_entry(msg["entry_id"])
+    if entry is None or entry.domain != DOMAIN:
+        connection.send_error(msg["id"], websocket_api.ERR_NOT_FOUND, "Plant not found")
+        return
+    hass.config_entries.async_update_entry(
+        entry, options={**entry.options, OPT_LANGUAGE: msg["language"]}
+    )
+    connection.send_result(msg["id"], {})
 
 
 def _manager(

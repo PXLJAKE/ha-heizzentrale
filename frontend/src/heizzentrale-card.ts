@@ -36,7 +36,7 @@ interface Room {
   id: string;
   name: string;
   climate_entity?: string | null;
-  window_entity?: string | null;
+  window_entities?: string[];
   circuit?: string | null;
   floor?: string | null;
 }
@@ -72,6 +72,7 @@ interface PumpGroup {
 interface Plant {
   entry_id: string;
   name: string;
+  language?: string | null;
   mode_entity?: string | null;
   outdoor_entity?: string | null;
   heat_sources: HeatSource[];
@@ -237,6 +238,10 @@ class HeizzentraleHouseCard extends LitElement {
   }
 
   protected updated(): void {
+    // A native modal dialog sits above everything, whatever the theme or the
+    // dashboard does with the card around it.
+    const dialog = this.renderRoot.querySelector("dialog");
+    if (dialog && !dialog.open) dialog.showModal();
     const house = this.renderRoot.querySelector(".house") ?? undefined;
     if (house !== this._observed) {
       this._resize?.disconnect();
@@ -378,8 +383,24 @@ class HeizzentraleHouseCard extends LitElement {
 
   // -- helpers --------------------------------------------------------------
 
+  /** Language chosen for the plant, else the language of Home Assistant. */
+  private get _language(): string {
+    const chosen = this._plant()?.language;
+    if (chosen === "de" || chosen === "en") return chosen;
+    return this._hass?.locale?.language ?? this._hass?.language ?? "en";
+  }
+
   private get _t() {
-    return translator(this._hass?.locale?.language ?? this._hass?.language);
+    return translator(this._language);
+  }
+
+  private async _setLanguage(plant: Plant, language: string): Promise<void> {
+    await this._hass?.callWS({
+      type: "heizzentrale/set_language",
+      entry_id: plant.entry_id,
+      language,
+    });
+    await this._load();
   }
 
   private _state(entityId?: string | null): HassEntity | undefined {
@@ -397,7 +418,7 @@ class HeizzentraleHouseCard extends LitElement {
 
   private _format(value: number | undefined, unit: string, digits = 1): string {
     if (value === undefined) return "–";
-    const language = this._hass?.locale?.language ?? this._hass?.language ?? "en";
+    const language = this._language;
     const text = new Intl.NumberFormat(language, {
       minimumFractionDigits: digits,
       maximumFractionDigits: digits,
@@ -426,6 +447,13 @@ class HeizzentraleHouseCard extends LitElement {
     if (state === "on") return true;
     if (state === "off") return false;
     return undefined;
+  }
+
+  private _windowOpen(room: Room): boolean {
+    // Every contact is read so the card follows all of them.
+    return (room.window_entities ?? [])
+      .map((entityId) => this._state(entityId)?.state === "on")
+      .includes(true);
   }
 
   private _select(selection: Selection): void {
@@ -573,7 +601,7 @@ class HeizzentraleHouseCard extends LitElement {
     const unavailable =
       !climate || climate.state === "unavailable" || climate.state === "unknown";
     const heating = attributes.hvac_action === "heating";
-    const windowOpen = this._state(room.window_entity)?.state === "on";
+    const windowOpen = this._windowOpen(room);
     const unit = "°";
     const current = attributes.current_temperature as number | undefined;
     const target = attributes.temperature as number | undefined;
@@ -855,7 +883,7 @@ class HeizzentraleHouseCard extends LitElement {
       else if (attributes.hvac_action === "heating")
         lines.push(t("x_room_heating", values));
       else lines.push(t("x_room_idle", values));
-      if (this._state(room.window_entity)?.state === "on")
+      if (this._windowOpen(room))
         lines.push(t("x_room_window"));
       if (attributes.preset_mode && attributes.preset_mode !== "none")
         lines.push(
@@ -991,12 +1019,14 @@ class HeizzentraleHouseCard extends LitElement {
       .filter(Boolean)
       .join(" · ");
     return html`
-      <div class="backdrop" @click=${close}>
+      <dialog
+        class="backdrop"
+        aria-label=${room.name}
+        @click=${close}
+        @cancel=${close}
+      >
         <div
           class="sheet"
-          role="dialog"
-          aria-modal="true"
-          aria-label=${room.name}
           @click=${(event: Event) => event.stopPropagation()}
           @keydown=${(event: KeyboardEvent) => event.key === "Escape" && close()}
         >
@@ -1093,7 +1123,7 @@ class HeizzentraleHouseCard extends LitElement {
             ${t("open_thermostat")}
           </button>
         </div>
-      </div>
+      </dialog>
     `;
   }
 
@@ -1200,6 +1230,21 @@ class HeizzentraleHouseCard extends LitElement {
             ${t("set_mode_active")}
           </p>
         </section>
+        <section class="set">
+          <h3>${t("set_language")}</h3>
+          <div class="choices">
+            ${["auto", "de", "en"].map(
+              (language) =>
+                html`<button
+                  class="choice ${(plant.language ?? "auto") === language ? "on" : ""}"
+                  @click=${() => this._setLanguage(plant, language)}
+                >
+                  ${t(`lang_${language}` as TextKey)}
+                </button>`,
+            )}
+          </div>
+          <p class="hint">${t("set_language_hint")}</p>
+        </section>
         ${section(
           t("set_sources"),
           plant.heat_sources.map((source) =>
@@ -1274,7 +1319,9 @@ class HeizzentraleHouseCard extends LitElement {
               join([
                 circuit && `${t("circuit")} ${circuit.name}`,
                 floor?.name,
-                room.window_entity && t("has_window"),
+                room.window_entities?.length === 1 && t("has_window"),
+                (room.window_entities?.length ?? 0) > 1 &&
+                  t("n_windows", { count: String(room.window_entities!.length) }),
               ]),
               [
                 ...(circuit || !plant.circuits.length ? [] : [t("warn_no_circuit")]),
@@ -1668,20 +1715,38 @@ class HeizzentraleHouseCard extends LitElement {
     .backdrop {
       position: fixed;
       inset: 0;
-      z-index: 10;
-      background: rgba(0, 0, 0, 0.45);
+      width: 100vw;
+      height: 100vh;
+      max-width: none;
+      max-height: none;
+      margin: 0;
+      border: 0;
+      box-sizing: border-box;
+      color: inherit;
+      background: rgba(0, 0, 0, 0.6);
       display: flex;
       align-items: center;
       justify-content: center;
       padding: 16px;
       animation: hz-fade 0.15s ease;
     }
+    .backdrop:not([open]) {
+      display: none;
+    }
+    .backdrop::backdrop {
+      background: transparent;
+    }
     .sheet {
       width: min(380px, 100%);
       max-height: 100%;
       overflow: auto;
       box-sizing: border-box;
-      background: var(--hz-card);
+      /* Solid on purpose: card backgrounds of some themes are see-through. */
+      background: color-mix(
+        in srgb,
+        var(--primary-text-color) 7%,
+        var(--primary-background-color, #fff)
+      );
       color: var(--primary-text-color);
       border-radius: 22px;
       padding: 18px;

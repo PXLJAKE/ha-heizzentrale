@@ -288,14 +288,14 @@
             "climate_entity": "Thermostat",
             "circuit": "Strang (optional)",
             "floor": "Stockwerk (optional)",
-            "window_entity": "Fensterkontakt (optional)"
+            "window_entity": "Fensterkontakte (optional)"
           },
           "data_description": {
             "name": "Leer lassen, dann wird der Name des Bereichs des Thermostats genommen.",
             "climate_entity": "Die climate-Entität, die diesen Raum regelt.",
             "circuit": "Der Strang, der die Heizkörper dieses Raums versorgt. Gibt es nur einen Strang, ist er schon ausgewählt.",
             "floor": "Leer lassen: Das Stockwerk kommt aus dem Bereich des Thermostats in Home Assistant. Nur wählen, um das zu überschreiben.",
-            "window_entity": "Wird in der Hausansicht angezeigt."
+            "window_entity": "Alle Fenster und Türen dieses Raums. Ist einer davon offen, gilt der Raum als offen."
           }
         },
         "reconfigure": {
@@ -306,14 +306,14 @@
             "climate_entity": "Thermostat",
             "circuit": "Strang (optional)",
             "floor": "Stockwerk (optional)",
-            "window_entity": "Fensterkontakt (optional)"
+            "window_entity": "Fensterkontakte (optional)"
           },
           "data_description": {
             "name": "Leer lassen, dann wird der Name des Bereichs des Thermostats genommen.",
             "climate_entity": "Die climate-Entität, die diesen Raum regelt.",
             "circuit": "Der Strang, der die Heizkörper dieses Raums versorgt. Gibt es nur einen Strang, ist er schon ausgewählt.",
             "floor": "Leer lassen: Das Stockwerk kommt aus dem Bereich des Thermostats in Home Assistant. Nur wählen, um das zu überschreiben.",
-            "window_entity": "Wird in der Hausansicht angezeigt."
+            "window_entity": "Alle Fenster und Türen dieses Raums. Ist einer davon offen, gilt der Raum als offen."
           }
         }
       },

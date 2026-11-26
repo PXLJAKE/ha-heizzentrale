@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.6.2-beta.1
+
+- Fixed: the room window was see-through and misplaced with some themes and
+  dashboards. It is now a real modal dialog with a solid background.
+- A room can have several window contacts.
+- The language of the house view can be set per plant in the settings view
+  (like Home Assistant, Deutsch, English).
+
 ## 0.6.1-beta.1
 
 - Pump group: the entity that switches it can be a selection with modes

@@ -137,6 +137,13 @@ const en = {
   setup_rooms: "Rooms",
   setup_rooms_hint:
     "One per thermostat. Name and floor come from Home Assistant on their own.",
+  n_windows: "{count} window contacts",
+  set_language: "Language",
+  lang_auto: "Like Home Assistant",
+  lang_de: "Deutsch",
+  lang_en: "English",
+  set_language_hint:
+    "Applies to this view for everyone. The setup dialogs of Home Assistant always follow the language in your user profile.",
   editor_plant: "Plant",
   editor_title: "Title (optional)",
   editor_first: "First plant",
@@ -281,6 +288,13 @@ const de: typeof en = {
   setup_rooms: "Räume",
   setup_rooms_hint:
     "Einer pro Thermostat. Name und Stockwerk kommen von selbst aus Home Assistant.",
+  n_windows: "{count} Fensterkontakte",
+  set_language: "Sprache",
+  lang_auto: "Wie Home Assistant",
+  lang_de: "Deutsch",
+  lang_en: "English",
+  set_language_hint:
+    "Gilt für diese Ansicht bei allen. Die Einrichtungsdialoge von Home Assistant folgen immer der Sprache in deinem Benutzerprofil.",
   editor_plant: "Anlage",
   editor_title: "Titel (optional)",
   editor_first: "Erste Anlage",

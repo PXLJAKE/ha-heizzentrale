@@ -157,6 +157,10 @@ class _PartFlow(ConfigSubentryFlow):
         """Name used when the form allows leaving it empty."""
         return ""
 
+    def _suggested(self, data: dict[str, Any]) -> dict[str, Any]:
+        """Stored data as shown when the part is changed."""
+        return data
+
     async def async_step_user(
         self, user_input: dict[str, Any] | None = None
     ) -> SubentryFlowResult:
@@ -179,7 +183,7 @@ class _PartFlow(ConfigSubentryFlow):
         return self.async_show_form(
             step_id="reconfigure",
             data_schema=self.add_suggested_values_to_schema(
-                self._schema(), subentry.data
+                self._schema(), self._suggested(dict(subentry.data))
             ),
         )
 
@@ -406,6 +410,12 @@ class CircuitFlow(_PartFlow):
 class RoomFlow(_PartFlow):
     """Room with a thermostat, assigned to a circuit and a floor."""
 
+    def _suggested(self, data: dict[str, Any]) -> dict[str, Any]:
+        """Older rooms stored a single window contact."""
+        if isinstance(data.get(CONF_WINDOW), str):
+            data[CONF_WINDOW] = [data[CONF_WINDOW]]
+        return data
+
     def _default_name(self, data: dict[str, Any]) -> str:
         """Area of the thermostat, else its friendly name."""
         entity_id: str = data[CONF_CLIMATE]
@@ -451,6 +461,7 @@ class RoomFlow(_PartFlow):
                     BinarySensorDeviceClass.DOOR,
                     BinarySensorDeviceClass.OPENING,
                 ],
+                multiple=True,
             )
         )
         return vol.Schema(schema)

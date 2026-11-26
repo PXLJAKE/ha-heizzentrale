@@ -405,3 +405,51 @@ async def test_pump_group_with_switch_skips_modes(hass: HomeAssistant) -> None:
     )
     assert result["type"] is FlowResultType.CREATE_ENTRY
     assert "control_off_option" not in result["data"]
+
+
+async def test_windows_and_language(
+    hass: HomeAssistant, hass_ws_client: WebSocketGenerator
+) -> None:
+    """Rooms take several window contacts; the view language is an option."""
+    entry = _entry(
+        {
+            "type": "room",
+            "data": {
+                CONF_NAME: "Alt",
+                "climate_entity": "climate.alt",
+                "window_entity": "binary_sensor.one",
+            },
+        },
+        {
+            "type": "room",
+            "data": {
+                CONF_NAME: "Neu",
+                "climate_entity": "climate.neu",
+                "window_entity": ["binary_sensor.a", "binary_sensor.b"],
+            },
+        },
+    )
+    await _setup(hass, entry)
+    client = await hass_ws_client(hass)
+    await client.send_json_auto_id({"type": "heizzentrale/plants"})
+    (plant,) = (await client.receive_json())["result"]["plants"]
+    assert plant["language"] == "auto"
+    windows = {room["name"]: room["window_entities"] for room in plant["rooms"]}
+    assert windows == {
+        "Alt": ["binary_sensor.one"],
+        "Neu": ["binary_sensor.a", "binary_sensor.b"],
+    }
+
+    await client.send_json_auto_id(
+        {
+            "type": "heizzentrale/set_language",
+            "entry_id": entry.entry_id,
+            "language": "de",
+        }
+    )
+    assert (await client.receive_json())["success"]
+    await hass.async_block_till_done()
+    assert entry.options["language"] == "de"
+    await client.send_json_auto_id({"type": "heizzentrale/plants"})
+    (plant,) = (await client.receive_json())["result"]["plants"]
+    assert plant["language"] == "de"
