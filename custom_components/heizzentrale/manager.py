@@ -30,6 +30,7 @@ from .const import (
     SUBENTRY_CIRCUIT,
     ValveType,
 )
+from .control import ControlEngine
 from .model import circuit_open, parse_float, spread
 
 STORAGE_VERSION = 1
@@ -51,7 +52,8 @@ class PlantManager:
     """Holds everything that lives longer than a single state change.
 
     Disk writes happen only when the user calibrates sensors or logs a valve
-    adjustment, never periodically.
+    adjustment, changes schedules or absence rules, or when such a rule or
+    schedule switches a thermostat. Never periodically.
     """
 
     def __init__(self, hass: HomeAssistant, entry: ConfigEntry) -> None:
@@ -66,6 +68,7 @@ class PlantManager:
         self._histories: dict[str, SpreadHistory] = {}
         self._unsub: CALLBACK_TYPE | None = None
         self.result: BalancingResult = analyse([])
+        self.control = ControlEngine(hass, self)
 
     # -- lifecycle ----------------------------------------------------------
 
@@ -77,6 +80,7 @@ class PlantManager:
                 for entity_id, value in data.get("offsets", {}).items()
             }
             self.log = list(data.get("log", []))
+            self.control.load(data.get("control", {}))
         self._histories = {
             subentry.subentry_id: SpreadHistory() for subentry in self.circuits
         }
@@ -84,16 +88,21 @@ class PlantManager:
             self.hass, self._async_sample, SAMPLE_INTERVAL
         )
         self._async_sample(dt_util.utcnow())
+        self.control.async_start()
 
     @callback
     def async_stop(self) -> None:
         """Stop sampling."""
+        self.control.async_stop()
         if self._unsub is not None:
             self._unsub()
             self._unsub = None
 
-    async def _async_save(self) -> None:
-        await self._store.async_save({"offsets": self.offsets, "log": self.log})
+    async def async_save(self) -> None:
+        """Write everything that has to survive a restart."""
+        await self._store.async_save(
+            {"offsets": self.offsets, "log": self.log, "control": self.control.dump()}
+        )
 
     # -- readings -----------------------------------------------------------
 
@@ -220,7 +229,7 @@ class PlantManager:
 
     async def _async_after_change(self) -> None:
         """Persist, restart the measurement and publish the new state."""
-        await self._async_save()
+        await self.async_save()
         for history in self._histories.values():
             history.clear()
         self._async_sample(dt_util.utcnow())

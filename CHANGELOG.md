@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.7.0-beta.1
+
+- Schedules: named lists of switch points (weekdays, time, action) that set
+  thermostats to a preset, a temperature, on or off. A schedule can be
+  assigned to single rooms and to whole floors; a room schedule wins over the
+  schedule of its floor.
+- Absence rules: when chosen people, phones or presence sensors have all been
+  away for a set time, chosen rooms or floors are turned down. On return the
+  schedule applies again, or the thermostat goes back to how it was.
+- Both are created in the settings of the card, without automations. They
+  start in "Only show": the room window tells what would be set, and nothing
+  is switched until "Apply" is chosen.
+- A change made by hand stays until the next switch point.
+
 ## 0.6.2-beta.1
 
 - Fixed: the room window was see-through and misplaced with some themes and

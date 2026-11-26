@@ -1,5 +1,6 @@
 import { LitElement, css, html, nothing, svg, type TemplateResult } from "lit";
 import { translator, type TextKey } from "./i18n";
+import { actionLabel, type Control } from "./control";
 
 // ---------------------------------------------------------------------------
 // Types (only what the card needs from Home Assistant)
@@ -150,6 +151,7 @@ class HeizzentraleHouseCard extends LitElement {
     _pipes: { state: true },
     _view: { state: true },
     _pendingTarget: { state: true },
+    _control: { state: true },
   };
 
   private _hass?: Hass;
@@ -162,6 +164,7 @@ class HeizzentraleHouseCard extends LitElement {
   private _view: "house" | "settings" = "house";
   private _pendingTarget?: { entity: string; value: number };
   private _targetTimer?: number;
+  private _control?: Control;
   private _pipes: Pipe[] = [];
   private _pipeSignature = "";
   private _resize?: ResizeObserver;
@@ -221,11 +224,26 @@ class HeizzentraleHouseCard extends LitElement {
       });
       this._plants = result.plants;
       this._error = undefined;
+      void this._loadControl();
     } catch (err: any) {
       this._error = err?.message ?? String(err);
       this._plants = [];
     } finally {
       this._loading = false;
+    }
+  }
+
+  /** Schedules, absence rules and what they currently want per room. */
+  private async _loadControl(): Promise<void> {
+    const plant = this._plant();
+    if (!plant || !this._hass) return;
+    try {
+      this._control = await this._hass.callWS<Control>({
+        type: "heizzentrale/control/get",
+        entry_id: plant.entry_id,
+      });
+    } catch {
+      this._control = undefined;
     }
   }
 
@@ -462,6 +480,7 @@ class HeizzentraleHouseCard extends LitElement {
       this._selection.kind === selection.kind &&
       (this._selection as any).id === (selection as any).id;
     this._selection = same ? undefined : selection;
+    if (!same && selection.kind === "room") void this._loadControl();
   }
 
   private _key(event: KeyboardEvent, selection: Selection): void {
@@ -545,6 +564,7 @@ class HeizzentraleHouseCard extends LitElement {
             @click=${() => {
               this._selection = undefined;
               this._view = this._view === "settings" ? "house" : "settings";
+              void this._loadControl();
             }}
           >
             ${this._view === "settings" ? ICON_HOME : ICON_GEAR}
@@ -1107,6 +1127,7 @@ class HeizzentraleHouseCard extends LitElement {
             <div class="why-title">${t("why")}</div>
             ${lines.map((line) => html`<p>${line}</p>`)}
           </div>
+          ${this._renderPlan(room)}
           <button
             class="link"
             @click=${() => {
@@ -1124,6 +1145,31 @@ class HeizzentraleHouseCard extends LitElement {
           </button>
         </div>
       </dialog>
+    `;
+  }
+
+  /** What the schedule or an absence rule wants for this room right now. */
+  private _renderPlan(room: Room) {
+    const control = this._control;
+    if (!control || (!control.schedules.length && !control.rules.length)) return nothing;
+    const t = this._t;
+    const plan = control.rooms[room.id];
+    const action = plan
+      ? actionLabel(plan.action, t, this._hass as any, room.climate_entity)
+      : "";
+    return html`
+      <div class="why">
+        <div class="why-title">${t("plan")}</div>
+        ${plan
+          ? html`<p>
+                ${t(plan.source === "absence" ? "plan_absence" : "plan_schedule", {
+                  name: plan.name,
+                  action,
+                })}
+              </p>
+              ${control.enabled ? nothing : html`<p>${t("plan_would")}</p>`}`
+          : html`<p>${t("plan_none")}</p>`}
+      </div>
     `;
   }
 
@@ -1245,6 +1291,15 @@ class HeizzentraleHouseCard extends LitElement {
           </div>
           <p class="hint">${t("set_language_hint")}</p>
         </section>
+        ${this._control
+          ? html`<heizzentrale-control
+              .hass=${this._hass}
+              .plant=${plant}
+              .control=${this._control}
+              .t=${t}
+              @control-changed=${(event: CustomEvent<Control>) => (this._control = event.detail)}
+            ></heizzentrale-control>`
+          : nothing}
         ${section(
           t("set_sources"),
           plant.heat_sources.map((source) =>

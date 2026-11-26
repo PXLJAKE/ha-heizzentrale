@@ -16,16 +16,24 @@ const { chromium } = require("playwright");
     ["einrichtung-unterwegs", { width: 1024, height: 900 }, "?view=settings&partial=1"],
     ["einstellungen", { width: 1024, height: 900 }, "?view=settings"],
     ["einstellungen-handy-dunkel", { width: 390, height: 844 }, "?view=settings&theme=dark"],
+    ["zeitplaene-abwesenheit", { width: 1024, height: 900 }, "?view=settings", "heizzentrale-control"],
+    ["zeitplan-bearbeiten-handy", { width: 390, height: 844 }, "?view=settings&edit=schedule", "heizzentrale-control"],
+    ["abwesenheit-bearbeiten", { width: 1024, height: 900 }, "?view=settings&edit=rule&theme=dark", "heizzentrale-control"],
   ];
   const browser = await chromium.launch();
-  for (const [name, viewport, query] of jobs) {
+  for (const [name, viewport, query, part] of jobs) {
     const page = await browser.newPage({ viewport, deviceScaleFactor: 2 });
     page.on("pageerror", (error) => console.log(name, "ERROR", error.message));
     page.on("console", (message) => {
       if (message.type() === "error") console.log(name, message.text());
     });
     await page.goto(base + query);
-    await page.waitForTimeout(900);
+    await page.waitForTimeout(1100);
+    if (part) {
+      await page.locator(part).screenshot({ path: `${out}/${name}.png` });
+      await page.close();
+      continue;
+    }
     await page.screenshot({ path: `${out}/${name}.png`, fullPage: !name.startsWith("raum") });
     await page.close();
   }

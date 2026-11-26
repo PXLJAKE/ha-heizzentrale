@@ -81,8 +81,33 @@ if (q.get("panel")) {
 if (q.get("empty")) { for (const k of ["heat_sources", "buffers", "pump_groups", "circuits", "rooms", "floors"]) plant[k] = []; }
 if (q.get("partial")) { plant.rooms = []; plant.floors = []; plant.pump_groups = []; }
 card.setConfig({});
+Object.assign(states, {
+  "person.jake": { state: "not_home", attributes: { friendly_name: "Jake" } },
+  "person.mama": { state: "home", attributes: { friendly_name: "Mama" } },
+  "device_tracker.jake_iphone": { state: "not_home", attributes: { friendly_name: "Jake iPhone" } },
+  "device_tracker.mama_handy": { state: "home", attributes: { friendly_name: "Mama Handy (Unifi)" } },
+});
+const WORK = [0, 1, 2, 3, 4];
+const control = { enabled: false, active_rules: ["a1"],
+  schedules: [
+    { id: "s1", name: "Werktage", rooms: [], floors: ["eg", "og"], points: [
+      { days: WORK, time: "06:00", action: "preset:comfort" }, { days: WORK, time: "22:00", action: "preset:eco" },
+      { days: [5, 6], time: "08:00", action: "preset:comfort" }, { days: [5, 6], time: "23:00", action: "preset:eco" }] },
+    { id: "s2", name: "Bad morgens warm", rooms: ["r6"], floors: [], points: [
+      { days: [0, 1, 2, 3, 4, 5, 6], time: "05:30", action: "temperature:23" }, { days: [0, 1, 2, 3, 4, 5, 6], time: "08:00", action: "preset:eco" }] },
+  ],
+  rules: [
+    { id: "a1", name: "Jake unterwegs", entities: ["device_tracker.jake_iphone"], delay_min: 0, rooms: [], floors: ["dg"], action: "off" },
+    { id: "a2", name: "Mama nicht da", entities: ["device_tracker.mama_handy"], delay_min: 10, rooms: [], floors: ["eg"], action: "preset:eco" },
+  ],
+  rooms: { r1: { action: "off", source: "absence", name: "Jake unterwegs", applied: false }, r4: { action: "preset:comfort", source: "schedule", name: "Werktage", applied: false } } };
+if (q.get("empty") || q.get("partial")) { control.schedules = []; control.rules = []; control.rooms = {}; control.active_rules = []; }
 const PRESETS = { comfort: "Komfort", eco: "Eco", sleep: "Schlafen", away: "Abwesend" };
-const hass = () => ({ states: { ...states }, language: q.get("lang") || "de", callWS: async () => ({ plants: [plant] }),
+const hass = () => ({ states: { ...states }, language: q.get("lang") || "de", callWS: async (msg) => {
+    if (msg.type === "heizzentrale/control/get") return control;
+    if (msg.type === "heizzentrale/control/save") { for (const k of ["enabled", "schedules", "rules"]) if (k in msg) control[k] = msg[k]; return { ...control }; }
+    return { plants: [plant] };
+  },
   formatEntityAttributeValue: (_s, _a, v) => (q.get("lang") === "en" ? v : PRESETS[v] ?? v),
   callService: async (_d, service, data) => {
     const old = states[data.entity_id];
@@ -94,6 +119,13 @@ const hass = () => ({ states: { ...states }, language: q.get("lang") || "de", ca
   } });
 card.hass = hass();
 if (q.get("view")) setTimeout(() => { card._view = q.get("view"); }, 300);
+// ?edit=schedule or ?edit=rule opens the first one in the editor.
+if (q.get("edit")) setTimeout(() => {
+  const el = (card.renderRoot ?? card.shadowRoot).querySelector("heizzentrale-control");
+  if (q.get("edit") === "schedule") el._schedule = structuredClone(control.schedules[0]);
+  else el._rule = structuredClone(control.rules[1]);
+  el.scrollIntoView();
+}, 600);
 const pick = q.get("select");
 if (pick) setTimeout(() => { const [kind, id] = pick.split(":"); card._select({ kind, id }); }, 300);
 </script>
