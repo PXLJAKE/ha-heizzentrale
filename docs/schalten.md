@@ -7,6 +7,10 @@ Haus passen, und danach auf „Schaltet“ stellen.
 
 ![Würde jetzt schließen](assets/wuerde-schalten.webp){ loading=lazy }
 
+Im Modus „Schaltet“ sieht das so aus:
+
+![Schaltet](assets/schaltet.webp){ loading=lazy }
+
 ## So entscheidet sie
 
 **Ein Raum will Wärme**, wenn sein Thermostat an ist, kein Fenster offen ist

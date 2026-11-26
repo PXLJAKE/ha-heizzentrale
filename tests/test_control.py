@@ -704,3 +704,51 @@ async def test_preheat_never_starts_early_towards_colder(
     )
     assert control.payload()["rooms"][room_id]["action"] == "temperature:21"
     assert control.payload()["rooms"][room_id]["source"] == "schedule"
+
+
+async def test_switching_apply_off_hands_thermostats_back(
+    hass: HomeAssistant,
+    freezer: FrozenDateTimeFactory,
+    calls: list[tuple[str, dict[str, Any]]],
+) -> None:
+    hass.states.async_set("person.jake", "not_home")
+    entry, room_id = await _plant(hass)
+    control = entry.runtime_data.manager.control
+    rule = {
+        "id": "r1",
+        "name": "Jake weg",
+        "entities": ["person.jake"],
+        "delay_min": 0,
+        "rooms": [room_id],
+        "floors": [],
+        "action": "off",
+    }
+    await control.async_save(True, None, [rule])
+    assert calls == [
+        ("set_hvac_mode", {"entity_id": "climate.bad", "hvac_mode": "off"})
+    ]
+
+    # "Only show" must not leave the room switched off.
+    await control.async_save(enabled=False)
+    assert calls[1:] == [
+        ("set_hvac_mode", {"entity_id": "climate.bad", "hvac_mode": "heat"}),
+        ("set_preset_mode", {"entity_id": "climate.bad", "preset_mode": "comfort"}),
+    ]
+    assert hass.states.get("climate.bad").state == "heat"
+
+
+async def test_fahrenheit_thermostats_are_compared_in_celsius(
+    hass: HomeAssistant,
+) -> None:
+    from homeassistant.util.unit_system import US_CUSTOMARY_SYSTEM
+
+    hass.config.units = US_CUSTOMARY_SYSTEM
+    entry, _ = await _plant(hass)
+    control = entry.runtime_data.manager.control
+    # 50 °F is 10 °C: cold, but far from the frost guard at 8 °C.
+    hass.states.async_set(
+        "climate.bad", "heat", {**ATTRS, "temperature": 68, "current_temperature": 50}
+    )
+    reading = control._reading({"name": "Bad", "climate_entity": "climate.bad"})
+    assert round(reading.current, 1) == 10.0
+    assert round(reading.target, 1) == 20.0

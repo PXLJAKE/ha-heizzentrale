@@ -37,6 +37,23 @@ Schau den Zustand der gewählten Geräte in Home Assistant an. Die Regel
 greift nur, wenn **alle** weg sind und die Wartezeit um ist. `unavailable`
 zählt als anwesend.
 
+## Ich will Heizzentrale entfernen
+
+Stelle vorher den Betriebsmodus auf „Beobachtet“ und Zeitpläne sowie den
+Vorlauf nach Bedarf auf „Nur anzeigen“. Dann gibt Heizzentrale alles
+zurück, was sie verstellt hat. Entfernst du sie ohne diesen Schritt, bleiben
+geschlossene Stränge geschlossen und die Zahl der Heizkurve bleibt, wie sie
+gerade ist.
+
+## Ein Strang schließt nicht, obwohl kein Raum Wärme will
+
+- Steht der Betriebsmodus auf „Schaltet“?
+- Hat der Strang einen Stellantrieb und sind ihm Räume zugeordnet? Ohne
+  Räume gilt er immer als gebraucht.
+- Ist ein Thermostat an diesem Strang nicht erreichbar oder ein Raum unter
+  8 °C? Dann bleibt er sicherheitshalber offen.
+- Seit dem letzten Bedarf müssen 10 Minuten vergangen sein.
+
 ## Speichern nicht möglich
 
 Nur Administratoren können Einstellungen ändern.

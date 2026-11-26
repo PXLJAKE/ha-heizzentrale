@@ -18,6 +18,7 @@ async def async_get_config_entry_diagnostics(
 ) -> dict[str, Any]:
     """Return diagnostics with personal names removed."""
     manager = entry.runtime_data.manager
+    control = manager.control
     return {
         "entry": async_redact_data(
             {"title": entry.title, "version": entry.version, "data": dict(entry.data)},
@@ -31,7 +32,25 @@ async def async_get_config_entry_diagnostics(
         "balancing": {
             "state": manager.result.state.value,
             "target": manager.result.target,
-            "offsets": manager.offsets,
+            # Entity ids can contain names of people and rooms: values only.
+            "offsets": sorted(manager.offsets.values()),
             "log_entries": len(manager.log),
+        },
+        # Counts and switches only; names, entity ids and rooms stay out.
+        "control": {
+            "apply": control.enabled,
+            "schedules": len(control.schedules),
+            "rules": len(control.rules),
+            "stoves": len(control.stoves),
+            "window": control.window,
+            "preheat": control.preheat,
+            "learned_rates": sorted(control.learner.rates.values()),
+            "flow": {
+                key: value
+                for key, value in control.flow.settings.items()
+                if key != "entity"
+            }
+            | {"configured": bool(control.flow.settings["entity"])},
+            "switched": sorted(control.payload()["switched"].values()),
         },
     }

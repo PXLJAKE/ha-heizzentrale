@@ -9,6 +9,8 @@ nachstellen: runter, solange alle Räume warm werden, und wieder hoch, sobald
 ein Raum zu kalt bleibt. **Sie lernt dabei nichts und rät nichts**, sondern
 folgt den festen Regeln auf dieser Seite.
 
+![Vorlauf nach Bedarf, Vorheizen und Fenster](assets/vorlauf-fenster.webp){ loading=lazy }
+
 ## Einrichten
 
 Unter **Einstellungen, Vorlauf nach Bedarf**:
@@ -51,3 +53,6 @@ Räume, die aus sind oder deren Fenster offen ist, zählen nicht mit.
 Stellst du auf „Nur anzeigen“ zurück oder wählst eine andere Zahl, setzt
 Heizzentrale die Zahl wieder auf den Wert, den sie vor ihrer ersten Änderung
 hatte. Die letzten Änderungen stehen mit Uhrzeit in den Einstellungen.
+
+Die Regelung am Wärmeerzeuger selbst bleibt unangetastet: Heizzentrale
+schaltet keinen Brenner und greift nicht in die Pufferladung ein.

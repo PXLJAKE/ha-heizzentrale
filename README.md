@@ -10,10 +10,10 @@ stove rules right in the view, without writing automations.
 
 **Documentation (German): <https://pxljake.com/projects/Heizzentrale>**
 
-> **Beta.** Heizzentrale is under development. Features can change. Circuits
-> and pumps are not switched yet; the integration only shows what it would
-> do. Thermostats are only changed after you enable it explicitly. Do not
-> rely on it as the only control of your heating.
+> **Beta.** Heizzentrale is under development. Features can change. Out of
+> the box it only shows what it would do; thermostats, circuits, pumps and
+> the heating curve are only changed after you enable each of them
+> explicitly. Do not rely on it as the only control of your heating.
 
 ![House view](docs/assets/hausansicht-tablet-hell.webp)
 
@@ -28,8 +28,14 @@ stove rules right in the view, without writing automations.
 - **Absence rules**: turn rooms down while chosen people or phones are away.
 - **Stoves**: turn rooms down while a wood stove burns.
 - **Arrange the house** by drag and drop and add extra sensors to any tile.
-- **Preview of switching**: each circuit shows whether it is needed and what
-  would be switched.
+- **Switching circuits and pumps**: each circuit shows whether it is needed
+  and what would be switched. In the mode "Switching" Heizzentrale closes
+  circuits no room needs and switches the pump group off.
+- **Open windows** switch the room off, with a wait for short airing.
+- **Flow temperature by demand**: nudges the heating curve down while every
+  room gets warm and up when one stays cold, inside fixed limits.
+- **Preheating**: measures how fast each room warms up and starts early
+  enough for the room to be warm at the switch point.
 - German and English.
 
 | Room window | Schedules and absence | Arrange |
