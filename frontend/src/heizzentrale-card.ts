@@ -634,8 +634,10 @@ class HeizzentraleHouseCard extends LitElement {
     const known = new Set(plant.floors.map((floor) => floor.id));
     const edit = this._edit;
     const floors = edit ? (plant.all_floors ?? plant.floors) : plant.floors;
+    const hasStove = (floorId: string) =>
+      (this._control?.stoves ?? []).some((stove) => !stove.room && stove.floor === floorId);
     const storey = (name: string, rooms: Room[], floorId = "") =>
-      rooms.length || (edit && floorId)
+      rooms.length || (floorId && (edit || hasStove(floorId)))
         ? html`
             <section
               class="storey ${this._drag?.moved && this._drag.overFloor === floorId
@@ -646,7 +648,8 @@ class HeizzentraleHouseCard extends LitElement {
               ${name ? html`<div class="floor-name">${name}</div>` : nothing}
               <div class="rooms">
                 ${rooms.map((room) => this._renderRoom(plant, room, colors))}
-                ${rooms.length ? nothing : html`<div class="drop-hint">${t("edit_drop")}</div>`}
+                ${floorId ? this._renderStoveTiles(floorId) : nothing}
+                ${rooms.length || !edit ? nothing : html`<div class="drop-hint">${t("edit_drop")}</div>`}
               </div>
             </section>
           `
@@ -789,6 +792,33 @@ class HeizzentraleHouseCard extends LitElement {
           : nothing}
       </div>
     `;
+  }
+
+  /** Stoves standing in a room without a thermostat get a tile of their own. */
+  private _renderStoveTiles(floorId: string) {
+    const t = this._t;
+    return (this._control?.stoves ?? [])
+      .filter((stove) => !stove.room && stove.floor === floorId)
+      .map((stove) => {
+        const burning = !!this._control?.burning?.includes(stove.id);
+        return html`<div class="room stove-tile ${burning ? "heating" : ""}">
+          <div class="room-top">
+            <span class="room-name">${stove.name || t("stove")}</span>
+            <span class="icons"
+              >${burning
+                ? html`<span class="badge flame" title=${t("stove_burning")}>${ICON_FLAME}</span>`
+                : nothing}</span
+            >
+          </div>
+          <div class="room-temp">
+            ${this._format(this._number(stove.sensor), "", 0)}<span class="unit">°</span>
+          </div>
+          <div class="room-bottom">
+            <span>${t(burning ? "stove_burning" : "stove_out")}</span>
+            <span class="preset">${t("stove")}</span>
+          </div>
+        </div>`;
+      });
   }
 
   // -- edit mode ------------------------------------------------------------
@@ -2397,6 +2427,9 @@ class HeizzentraleHouseCard extends LitElement {
       background: var(--primary-color);
       color: var(--text-primary-color, #fff);
       cursor: pointer;
+    }
+    .stove-tile {
+      cursor: default;
     }
     .stove {
       display: flex;

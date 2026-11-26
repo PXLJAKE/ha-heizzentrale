@@ -34,6 +34,7 @@ export interface Stove {
   sensor: string | null;
   on_above: number;
   room: string | null;
+  floor?: string | null;
   actions: Record<string, string>;
 }
 
@@ -716,16 +717,33 @@ export class HeizzentraleControl extends LitElement {
         <label class="field">
           <span class="label">${t("stove_room")}</span>
           <select
-            @change=${(event: Event) =>
-              update({ room: (event.target as HTMLSelectElement).value || null })}
+            @change=${(event: Event) => {
+              const [kind, id] = (event.target as HTMLSelectElement).value.split(":");
+              update({ room: kind === "room" ? id : null, floor: kind === "floor" ? id : null });
+            }}
           >
-            <option value="" ?selected=${!draft.room}>${t("stove_room_none")}</option>
-            ${this.plant?.rooms.map(
-              (room) =>
-                html`<option value=${room.id} ?selected=${draft.room === room.id}>
-                  ${this._roomLabel(room)}
-                </option>`,
-            )}
+            <option value="" ?selected=${!draft.room && !draft.floor}>
+              ${t("stove_room_none")}
+            </option>
+            <optgroup label=${t("stove_in_room")}>
+              ${this.plant?.rooms.map(
+                (room) =>
+                  html`<option value="room:${room.id}" ?selected=${draft.room === room.id}>
+                    ${this._roomLabel(room)}
+                  </option>`,
+              )}
+            </optgroup>
+            <optgroup label=${t("stove_own_tile")}>
+              ${this.plant?.floors.map(
+                (floor) =>
+                  html`<option
+                    value="floor:${floor.id}"
+                    ?selected=${!draft.room && draft.floor === floor.id}
+                  >
+                    ${floor.name}
+                  </option>`,
+              )}
+            </optgroup>
           </select>
         </label>
         <div class="label">${t("stove_actions")}</div>
@@ -854,6 +872,7 @@ export class HeizzentraleControl extends LitElement {
                   sensor: null,
                   on_above: 40,
                   room: null,
+                  floor: null,
                   actions: {},
                 };
               }}

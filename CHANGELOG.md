@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.10.1-beta.1
+
+- A stove can get a tile of its own on a floor, for stoves standing in a
+  room without a thermostat such as a hallway.
+
 ## 0.10.0-beta.1
 
 - "Would switch now": Heizzentrale works out which circuits are needed from

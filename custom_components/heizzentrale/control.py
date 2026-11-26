@@ -121,6 +121,8 @@ STOVE_SCHEMA = vol.Schema(
             vol.Coerce(float), vol.Range(min=25, max=500)
         ),
         vol.Optional("room", default=None): vol.Any(None, _ID),
+        # For a stove in a room without a thermostat: its own tile on a floor.
+        vol.Optional("floor", default=None): vol.Any(None, _ID),
         vol.Optional("actions", default=dict): vol.All(
             {_ID: _action}, vol.Length(max=100)
         ),
