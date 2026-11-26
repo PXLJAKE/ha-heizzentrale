@@ -1,7 +1,9 @@
 # Changelog
 
-## Unreleased
+## 0.3.0-beta.1
 
+- House view redrawn as a cross-section of the house: roof, storeys, ground
+  line and basement with the plant room, outlines only. Two columns on phones.
 - Balancing assistant, backend: sensor calibration (offsets so all pipe
   sensors agree), 30 minute spread averages with a settling check, analysis
   of all open circuits and one recommended valve step per round, log of
