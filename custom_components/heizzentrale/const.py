@@ -27,6 +27,8 @@ CONF_VOLUME: Final = "volume"
 
 # Pump group (shares CONF_FLOW, CONF_RETURN and CONF_STATUS)
 CONF_CONTROL: Final = "control_entity"
+CONF_CONTROL_OFF: Final = "control_off_option"
+CONF_CONTROL_ON: Final = "control_on_option"
 
 # Circuit
 CONF_PUMP_GROUP: Final = "pump_group"

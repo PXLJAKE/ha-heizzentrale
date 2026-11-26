@@ -172,7 +172,7 @@
             "flow_entity": "Sensor behind the mixer: the temperature of the water going to the circuits.",
             "return_entity": "Sensor on the common return pipe.",
             "status_entity": "An entity that tells whether the pump is running.",
-            "control_entity": "The entity that turns this pump group or its heating circuit on and off. Heizzentrale does not switch it yet; it is used once switching is enabled."
+            "control_entity": "The entity that turns this pump group or its heating circuit on and off. A switch works, and so does a selection with modes such as off and auto. Heizzentrale does not switch it yet."
           }
         },
         "reconfigure": {
@@ -190,12 +190,27 @@
             "flow_entity": "Sensor behind the mixer: the temperature of the water going to the circuits.",
             "return_entity": "Sensor on the common return pipe.",
             "status_entity": "An entity that tells whether the pump is running.",
-            "control_entity": "The entity that turns this pump group or its heating circuit on and off. Heizzentrale does not switch it yet; it is used once switching is enabled."
+            "control_entity": "The entity that turns this pump group or its heating circuit on and off. A switch works, and so does a selection with modes such as off and auto. Heizzentrale does not switch it yet."
+          }
+        },
+        "control_options": {
+          "title": "How is it switched?",
+          "description": "{entity} has several modes. Tell Heizzentrale which mode turns the pump group off and which turns it back on. Nothing is switched yet; this is used once switching is enabled.",
+          "data": {
+            "control_off_option": "Mode for off",
+            "control_on_option": "Mode for on"
+          },
+          "data_description": {
+            "control_off_option": "The mode in which this heating circuit does not heat.",
+            "control_on_option": "The mode for normal operation, usually automatic."
           }
         }
       },
       "abort": {
         "reconfigure_successful": "Saved."
+      },
+      "error": {
+        "same_option": "Off and on must be two different modes."
       }
     },
     "circuit": {

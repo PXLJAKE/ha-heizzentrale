@@ -26,6 +26,8 @@ from .const import (
     CONF_CIRCUIT,
     CONF_CLIMATE,
     CONF_CONTROL,
+    CONF_CONTROL_OFF,
+    CONF_CONTROL_ON,
     CONF_FLOOR,
     CONF_FLOW,
     CONF_KIND,
@@ -224,6 +226,18 @@ class BufferFlow(_PartFlow):
         )
 
 
+_MODE_DOMAINS = ("select", "input_select")
+
+
+def _guess(options: list[str], words: tuple[str, ...]) -> str | None:
+    """First option that contains one of the words, in the order of the words."""
+    for word in words:
+        for option in options:
+            if word in option.lower():
+                return option
+    return None
+
+
 class PumpGroupFlow(_PartFlow):
     """Pump group, with or without mixer, that feeds one or more circuits."""
 
@@ -240,10 +254,112 @@ class PumpGroupFlow(_PartFlow):
                 ),
                 vol.Optional(CONF_CONTROL): selector.EntitySelector(
                     selector.EntitySelectorConfig(
-                        domain=["switch", "input_boolean", "climate", "select"]
+                        domain=[
+                            "switch",
+                            "input_boolean",
+                            "climate",
+                            "select",
+                            "input_select",
+                        ]
                     )
                 ),
             }
+        )
+
+    # A control entity with modes (select) needs a second question: which
+    # mode means off and which means on.
+
+    _data: dict[str, Any]
+    _reconfiguring: bool = False
+
+    def _mode_options(self) -> list[str] | None:
+        """Options of the control entity if it is a select, else None."""
+        entity_id = self._data.get(CONF_CONTROL)
+        if not entity_id or entity_id.split(".", 1)[0] not in _MODE_DOMAINS:
+            return None
+        state = self.hass.states.get(entity_id)
+        options = state.attributes.get("options") if state else None
+        return [str(option) for option in options] if options else []
+
+    def _finish(self) -> SubentryFlowResult:
+        if self._reconfiguring:
+            return self.async_update_and_abort(
+                self._get_entry(),
+                self._get_reconfigure_subentry(),
+                title=self._data[CONF_NAME],
+                data=self._data,
+            )
+        return self.async_create_entry(title=self._data[CONF_NAME], data=self._data)
+
+    async def async_step_user(
+        self, user_input: dict[str, Any] | None = None
+    ) -> SubentryFlowResult:
+        """Add a pump group."""
+        if user_input is None:
+            return await super().async_step_user()
+        self._data = self._named(user_input)
+        if self._mode_options() is not None:
+            return await self.async_step_control_options()
+        return self._finish()
+
+    async def async_step_reconfigure(
+        self, user_input: dict[str, Any] | None = None
+    ) -> SubentryFlowResult:
+        """Change a pump group."""
+        self._reconfiguring = True
+        if user_input is None:
+            return await super().async_step_reconfigure()
+        self._data = self._named(user_input)
+        if self._mode_options() is not None:
+            return await self.async_step_control_options()
+        return self._finish()
+
+    async def async_step_control_options(
+        self, user_input: dict[str, Any] | None = None
+    ) -> SubentryFlowResult:
+        """Ask which mode switches the pump group off and which on."""
+        errors: dict[str, str] = {}
+        if user_input is not None:
+            if user_input[CONF_CONTROL_OFF] == user_input[CONF_CONTROL_ON]:
+                errors["base"] = "same_option"
+            else:
+                self._data |= {
+                    CONF_CONTROL_OFF: user_input[CONF_CONTROL_OFF].strip(),
+                    CONF_CONTROL_ON: user_input[CONF_CONTROL_ON].strip(),
+                }
+                return self._finish()
+
+        options = self._mode_options() or []
+        # Without known options (entity not available right now) ask as text.
+        field: Any = (
+            selector.SelectSelector(
+                selector.SelectSelectorConfig(
+                    options=options, mode=selector.SelectSelectorMode.DROPDOWN
+                )
+            )
+            if options
+            else selector.TextSelector()
+        )
+        previous = self._get_reconfigure_subentry().data if self._reconfiguring else {}
+        suggested = {
+            CONF_CONTROL_OFF: previous.get(CONF_CONTROL_OFF)
+            or _guess(options, ("aus", "off")),
+            CONF_CONTROL_ON: previous.get(CONF_CONTROL_ON)
+            or _guess(options, ("auto", "ein", "on")),
+        }
+        if options:
+            suggested = {k: v for k, v in suggested.items() if v in options}
+        schema = vol.Schema(
+            {
+                vol.Required(CONF_CONTROL_OFF): field,
+                vol.Required(CONF_CONTROL_ON): field,
+            }
+        )
+        return self.async_show_form(
+            step_id="control_options",
+            data_schema=self.add_suggested_values_to_schema(schema, suggested),
+            errors=errors,
+            description_placeholders={"entity": self._data[CONF_CONTROL]},
         )
 
 
