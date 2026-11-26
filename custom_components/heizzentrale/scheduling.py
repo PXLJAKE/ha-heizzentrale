@@ -6,6 +6,9 @@ point. An action is a thermostat preset such as ``comfort`` or ``off``.
 
 An absence rule names people or devices. Once all of them have been away for
 the given time, its rooms get the rule's action and the schedule waits.
+
+A stove has a temperature sensor. While it burns, the rooms it warms get the
+action chosen for each of them.
 """
 
 from __future__ import annotations
@@ -20,6 +23,10 @@ MINUTES_PER_WEEK = 7 * MINUTES_PER_DAY
 
 SOURCE_SCHEDULE = "schedule"
 SOURCE_ABSENCE = "absence"
+SOURCE_STOVE = "stove"
+
+# A stove counts as out again once it is this much cooler than its threshold.
+STOVE_HYSTERESIS = 5.0
 
 _PRESENT_STATES = {"home", "on"}
 _UNKNOWN_STATES = {"unavailable", "unknown", ""}
@@ -85,6 +92,22 @@ def rule_active(
     return all(present is False and age >= delay_seconds for present, age in items)
 
 
+def stove_burning(
+    temperature: float | None, threshold: float, was_burning: bool
+) -> bool:
+    """Whether a stove counts as burning.
+
+    It starts at the threshold and stops a few degrees below it, so a reading
+    that hovers around the threshold does not switch rooms back and forth.
+    Without a reading the stove counts as out: the radiators keep working.
+    """
+    if temperature is None:
+        return False
+    if was_burning:
+        return temperature > threshold - STOVE_HYSTERESIS
+    return temperature >= threshold
+
+
 @dataclass(frozen=True)
 class Desired:
     """What a room should be set to right now and why."""
@@ -110,16 +133,23 @@ def desired_for_room(
     active_rules: Iterable[Mapping[str, Any]],
     weekday: int,
     minute: int,
+    burning: Iterable[Mapping[str, Any]] = (),
 ) -> Desired | None:
     """Decide the action for one room.
 
-    An active absence rule wins over the schedule. A schedule assigned to the
+    An active absence rule wins, then a burning stove, then the schedule.
+    ``burning`` holds the stoves that burn right now; each names an action
+    per room under ``actions``. A schedule assigned to the
     room itself wins over one assigned to its floor. None means nothing is
     set up for this room, so it is left alone.
     """
     for rule in active_rules:
         if _targets(rule, room_id, floor_id):
             return Desired(rule["action"], SOURCE_ABSENCE, rule.get("name", ""))
+
+    for stove in burning:
+        if action := stove.get("actions", {}).get(room_id):
+            return Desired(action, SOURCE_STOVE, stove.get("name", ""))
 
     chosen: Mapping[str, Any] | None = None
     rank = 0

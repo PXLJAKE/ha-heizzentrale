@@ -25,12 +25,13 @@ from homeassistant.helpers.event import (
 from homeassistant.util import dt as dt_util
 
 from .scheduling import (
-    SOURCE_ABSENCE,
+    SOURCE_SCHEDULE,
     Desired,
     desired_for_room,
     is_present,
     parse_time,
     rule_active,
+    stove_burning,
 )
 
 if TYPE_CHECKING:
@@ -48,6 +49,7 @@ _ACTION_PATTERN = re.compile(
 
 MAX_SCHEDULES = 30
 MAX_RULES = 30
+MAX_STOVES = 10
 MAX_POINTS = 60
 
 
@@ -104,8 +106,23 @@ RULE_SCHEMA = vol.Schema(
         vol.Required("action"): _action,
     }
 )
+STOVE_SCHEMA = vol.Schema(
+    {
+        vol.Required("id"): _ID,
+        vol.Required("name"): _NAME,
+        vol.Optional("sensor", default=None): vol.Any(None, cv.entity_id),
+        vol.Optional("on_above", default=40): vol.All(
+            vol.Coerce(float), vol.Range(min=25, max=500)
+        ),
+        vol.Optional("room", default=None): vol.Any(None, _ID),
+        vol.Optional("actions", default=dict): vol.All(
+            {_ID: _action}, vol.Length(max=100)
+        ),
+    }
+)
 SCHEDULES_SCHEMA = vol.All([SCHEDULE_SCHEMA], vol.Length(max=MAX_SCHEDULES))
 RULES_SCHEMA = vol.All([RULE_SCHEMA], vol.Length(max=MAX_RULES))
+STOVES_SCHEMA = vol.All([STOVE_SCHEMA], vol.Length(max=MAX_STOVES))
 
 
 class ControlEngine:
@@ -118,6 +135,9 @@ class ControlEngine:
         self.enabled = False
         self.schedules: list[dict[str, Any]] = []
         self.rules: list[dict[str, Any]] = []
+        self.stoves: list[dict[str, Any]] = []
+        # Stoves that currently burn; kept for the switch-off hysteresis.
+        self._burning: list[str] = []
         # Last action the engine set per room; survives restarts.
         self._applied: dict[str, str] = {}
         # Thermostat state before an absence rule changed it, per room.
@@ -136,6 +156,8 @@ class ControlEngine:
         self.enabled = bool(data.get("enabled", False))
         self.schedules = list(data.get("schedules", []))
         self.rules = list(data.get("rules", []))
+        self.stoves = list(data.get("stoves", []))
+        self._burning = list(data.get("burning", []))
         self._applied = dict(data.get("applied", {}))
         self._restore = dict(data.get("restore", {}))
         self._active = list(data.get("active", []))
@@ -146,6 +168,8 @@ class ControlEngine:
             "enabled": self.enabled,
             "schedules": self.schedules,
             "rules": self.rules,
+            "stoves": self.stoves,
+            "burning": self._burning,
             "applied": self._applied,
             "restore": self._restore,
             "active": self._active,
@@ -173,7 +197,10 @@ class ControlEngine:
         if self._unsub_state is not None:
             self._unsub_state()
             self._unsub_state = None
-        entities = sorted({e for rule in self.rules for e in rule["entities"]})
+        entities = sorted(
+            {e for rule in self.rules for e in rule["entities"]}
+            | {stove["sensor"] for stove in self.stoves if stove.get("sensor")}
+        )
         if entities:
             self._unsub_state = async_track_state_change_event(
                 self.hass, entities, self._on_state
@@ -198,6 +225,7 @@ class ControlEngine:
         enabled: bool | None = None,
         schedules: list[dict[str, Any]] | None = None,
         rules: list[dict[str, Any]] | None = None,
+        stoves: list[dict[str, Any]] | None = None,
     ) -> None:
         """Store changed settings and apply them right away."""
         if enabled is not None:
@@ -206,7 +234,9 @@ class ControlEngine:
             self.schedules = schedules
         if rules is not None:
             self.rules = rules
-            self._track_entities()
+        if stoves is not None:
+            self.stoves = stoves
+        self._track_entities()
         await self._manager.async_save()
         await self.async_run()
 
@@ -240,6 +270,18 @@ class ControlEngine:
                 active.append(rule)
         return active
 
+    def _burning_stoves(self) -> list[dict[str, Any]]:
+        """Stoves whose sensor says that they burn."""
+        return [
+            stove
+            for stove in self.stoves
+            if stove_burning(
+                self._manager.celsius(stove.get("sensor")),
+                stove["on_above"],
+                stove["id"] in self._burning,
+            )
+        ]
+
     async def async_run(self) -> None:
         """Work out what every room should be set to and apply changes."""
         async with self._lock:
@@ -251,6 +293,11 @@ class ControlEngine:
             active_ids = [rule["id"] for rule in active]
             if active_ids != self._active:
                 self._active = active_ids
+                changed = True
+            burning = self._burning_stoves()
+            burning_ids = [stove["id"] for stove in burning]
+            if burning_ids != self._burning:
+                self._burning = burning_ids
                 changed = True
 
             status: dict[str, dict[str, Any]] = {}
@@ -264,6 +311,7 @@ class ControlEngine:
                     active,
                     local.weekday(),
                     minute,
+                    burning,
                 )
                 if not climate:
                     continue
@@ -286,7 +334,7 @@ class ControlEngine:
         if not self.enabled:
             return False
         if desired is None:
-            # Nothing is planned any more: undo what an absence rule did.
+            # Nothing is planned any more: undo what a rule or stove did.
             had = self._applied.pop(room_id, None) is not None
             if (previous := self._restore.pop(room_id, None)) is not None:
                 await self._async_restore(climate, previous)
@@ -294,7 +342,7 @@ class ControlEngine:
             return had
         if self._applied.get(room_id) == desired.action:
             return False
-        if desired.source == SOURCE_ABSENCE:
+        if desired.source != SOURCE_SCHEDULE:
             if room_id not in self._restore and (
                 state := self.hass.states.get(climate)
             ):
@@ -368,6 +416,8 @@ class ControlEngine:
             "enabled": self.enabled,
             "schedules": self.schedules,
             "rules": self.rules,
+            "stoves": self.stoves,
             "active_rules": self._active,
+            "burning": self._burning,
             "rooms": self._status,
         }

@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.8.0-beta.1
+
+- Stoves: a wood stove with a temperature sensor and a threshold from which it
+  counts as burning. Per room an action applies while it burns, for example
+  the stove's room off and rooms further away on Eco. Once it has cooled down
+  the schedule applies again. An absence rule still wins over a stove.
+- The stove shows in its room in the house view with its temperature.
+
 ## 0.7.0-beta.1
 
 - Schedules: named lists of switch points (weekdays, time, action) that set

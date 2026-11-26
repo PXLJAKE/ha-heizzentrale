@@ -183,3 +183,42 @@ async def test_settings_survive_reload(hass: HomeAssistant) -> None:
     assert await hass.config_entries.async_reload(entry.entry_id)
     await hass.async_block_till_done()
     assert entry.runtime_data.manager.control.schedules[0]["name"] == "Immer"
+
+
+async def test_stove_turns_rooms_down_while_burning(
+    hass: HomeAssistant, calls: list[tuple[str, dict[str, Any]]]
+) -> None:
+    hass.states.async_set("sensor.ofen", "22", {"unit_of_measurement": "°C"})
+    entry, room_id = await _plant(hass)
+    control = entry.runtime_data.manager.control
+    stove = {
+        "id": "o1",
+        "name": "Schwedenofen",
+        "sensor": "sensor.ofen",
+        "on_above": 40.0,
+        "room": room_id,
+        "actions": {room_id: "off"},
+    }
+    await control.async_save(True, None, None, [stove])
+    assert calls == []
+
+    hass.states.async_set("sensor.ofen", "85", {"unit_of_measurement": "°C"})
+    await hass.async_block_till_done(wait_background_tasks=True)
+    assert calls == [
+        ("set_hvac_mode", {"entity_id": "climate.bad", "hvac_mode": "off"})
+    ]
+    assert control.payload()["burning"] == ["o1"]
+    assert control.payload()["rooms"][room_id]["source"] == "stove"
+
+    # Slightly below the threshold it still counts as burning.
+    hass.states.async_set("sensor.ofen", "37", {"unit_of_measurement": "°C"})
+    await hass.async_block_till_done(wait_background_tasks=True)
+    assert len(calls) == 1
+
+    hass.states.async_set("sensor.ofen", "30", {"unit_of_measurement": "°C"})
+    await hass.async_block_till_done(wait_background_tasks=True)
+    assert calls[1:] == [
+        ("set_hvac_mode", {"entity_id": "climate.bad", "hvac_mode": "heat"}),
+        ("set_preset_mode", {"entity_id": "climate.bad", "preset_mode": "comfort"}),
+    ]
+    assert control.payload()["burning"] == []
