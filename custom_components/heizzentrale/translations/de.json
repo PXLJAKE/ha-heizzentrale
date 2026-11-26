@@ -3,23 +3,23 @@
     "step": {
       "user": {
         "title": "Heizungsanlage einrichten",
-        "description": "Heizzentrale startet im Beobachtungsmodus: Sie misst und erklärt nur, geschaltet wird nichts.",
+        "description": "Heizzentrale startet im Beobachtungsmodus: Sie misst und erklärt nur, geschaltet wird nichts. Danach fügst du nacheinander Wärmeerzeuger, Pufferspeicher, Pumpengruppe, Stränge und Räume hinzu. Pflicht ist jeweils nur der Name, alles andere kannst du nachtragen.",
         "data": {
           "name": "Name der Anlage",
-          "outdoor_temperature_entity": "Außentemperaturfühler"
+          "outdoor_temperature_entity": "Außentemperaturfühler (optional)"
         },
         "data_description": {
           "name": "Wird in Home Assistant angezeigt, zum Beispiel \"Heizung\" oder der Name deines Hauses.",
-          "outdoor_temperature_entity": "Optional. Wird später für den Frostschutz und die Auswertung genutzt. Du kannst ihn jederzeit nachtragen."
+          "outdoor_temperature_entity": "Wird später für den Frostschutz und die Auswertung genutzt. Du kannst ihn jederzeit nachtragen."
         }
       },
       "reconfigure": {
         "title": "Einstellungen der Anlage ändern",
         "data": {
-          "outdoor_temperature_entity": "Außentemperaturfühler"
+          "outdoor_temperature_entity": "Außentemperaturfühler (optional)"
         },
         "data_description": {
-          "outdoor_temperature_entity": "Optional. Wird später für den Frostschutz und die Auswertung genutzt."
+          "outdoor_temperature_entity": "Wird später für den Frostschutz und die Auswertung genutzt."
         }
       }
     },
@@ -71,13 +71,13 @@
       "step": {
         "user": {
           "title": "Wärmeerzeuger",
-          "description": "Kessel, Wärmepumpe oder ein anderes Gerät, das Wärme erzeugt. Alle Fühler sind optional.",
+          "description": "Schritt 1 von 5. Kessel, Wärmepumpe oder ein anderes Gerät, das Wärme erzeugt. Alle Fühler sind optional.",
           "data": {
             "name": "Name",
             "kind": "Art",
-            "boiler_temperature_entity": "Kesseltemperatur",
-            "flow_entity": "Vorlauftemperatur",
-            "status_entity": "Status"
+            "boiler_temperature_entity": "Kesseltemperatur (optional)",
+            "flow_entity": "Vorlauftemperatur (optional)",
+            "status_entity": "Status (optional)"
           },
           "data_description": {
             "name": "Zum Beispiel \"Pelletkessel\".",
@@ -89,13 +89,13 @@
         },
         "reconfigure": {
           "title": "Wärmeerzeuger",
-          "description": "Kessel, Wärmepumpe oder ein anderes Gerät, das Wärme erzeugt. Alle Fühler sind optional.",
+          "description": "Schritt 1 von 5. Kessel, Wärmepumpe oder ein anderes Gerät, das Wärme erzeugt. Alle Fühler sind optional.",
           "data": {
             "name": "Name",
             "kind": "Art",
-            "boiler_temperature_entity": "Kesseltemperatur",
-            "flow_entity": "Vorlauftemperatur",
-            "status_entity": "Status"
+            "boiler_temperature_entity": "Kesseltemperatur (optional)",
+            "flow_entity": "Vorlauftemperatur (optional)",
+            "status_entity": "Status (optional)"
           },
           "data_description": {
             "name": "Zum Beispiel \"Pelletkessel\".",
@@ -119,30 +119,78 @@
       "step": {
         "user": {
           "title": "Pufferspeicher",
-          "description": "Ein Speicher für heißes Wasser. Wähle die Temperaturfühler von oben nach unten.",
+          "description": "Schritt 2 von 5, nur falls vorhanden. Ein Speicher für heißes Wasser. Wähle die Temperaturfühler von oben nach unten.",
           "data": {
             "name": "Name",
-            "sensor_entities": "Temperaturfühler, oben zuerst",
-            "volume": "Volumen"
+            "sensor_entities": "Temperaturfühler, oben zuerst (optional)",
+            "volume": "Volumen (optional)"
           },
           "data_description": {
             "name": "Zum Beispiel \"Puffer\".",
             "sensor_entities": "Die Reihenfolge der Auswahl ist die Reihenfolge im Bild: Der erste Fühler sitzt oben im Speicher.",
-            "volume": "Optional. Wird später genutzt, um die gespeicherte Energie zu schätzen."
+            "volume": "Wird später genutzt, um die gespeicherte Energie zu schätzen."
           }
         },
         "reconfigure": {
           "title": "Pufferspeicher",
-          "description": "Ein Speicher für heißes Wasser. Wähle die Temperaturfühler von oben nach unten.",
+          "description": "Schritt 2 von 5, nur falls vorhanden. Ein Speicher für heißes Wasser. Wähle die Temperaturfühler von oben nach unten.",
           "data": {
             "name": "Name",
-            "sensor_entities": "Temperaturfühler, oben zuerst",
-            "volume": "Volumen"
+            "sensor_entities": "Temperaturfühler, oben zuerst (optional)",
+            "volume": "Volumen (optional)"
           },
           "data_description": {
             "name": "Zum Beispiel \"Puffer\".",
             "sensor_entities": "Die Reihenfolge der Auswahl ist die Reihenfolge im Bild: Der erste Fühler sitzt oben im Speicher.",
-            "volume": "Optional. Wird später genutzt, um die gespeicherte Energie zu schätzen."
+            "volume": "Wird später genutzt, um die gespeicherte Energie zu schätzen."
+          }
+        }
+      },
+      "abort": {
+        "reconfigure_successful": "Gespeichert."
+      }
+    },
+    "pump_group": {
+      "initiate_flow": {
+        "user": "Pumpengruppe hinzufügen",
+        "reconfigure": "Ändern: Pumpengruppe"
+      },
+      "entry_type": "Pumpengruppe",
+      "step": {
+        "user": {
+          "title": "Pumpengruppe",
+          "description": "Schritt 3 von 5, nur falls vorhanden. Die Pumpe, mit oder ohne Mischer, die Heizwasser in einen oder mehrere Stränge drückt, zum Beispiel in einen Verteiler. Sind alle Stränge dahinter zu, hat sie nichts mehr zu tun.",
+          "data": {
+            "name": "Name",
+            "flow_entity": "Vorlauftemperatur (optional)",
+            "return_entity": "Rücklauftemperatur (optional)",
+            "status_entity": "Pumpenstatus (optional)",
+            "control_entity": "Geschaltet über (optional)"
+          },
+          "data_description": {
+            "name": "Zum Beispiel „Pumpengruppe Heizkörper“.",
+            "flow_entity": "Fühler hinter dem Mischer: die Temperatur des Wassers, das zu den Strängen geht.",
+            "return_entity": "Fühler am gemeinsamen Rücklauf.",
+            "status_entity": "Eine Entität, die zeigt, ob die Pumpe läuft.",
+            "control_entity": "Die Entität, die diese Pumpengruppe oder ihren Heizkreis ein- und ausschaltet. Heizzentrale schaltet sie noch nicht; sie wird benutzt, sobald das Schalten freigegeben ist."
+          }
+        },
+        "reconfigure": {
+          "title": "Pumpengruppe",
+          "description": "Schritt 3 von 5, nur falls vorhanden. Die Pumpe, mit oder ohne Mischer, die Heizwasser in einen oder mehrere Stränge drückt, zum Beispiel in einen Verteiler. Sind alle Stränge dahinter zu, hat sie nichts mehr zu tun.",
+          "data": {
+            "name": "Name",
+            "flow_entity": "Vorlauftemperatur (optional)",
+            "return_entity": "Rücklauftemperatur (optional)",
+            "status_entity": "Pumpenstatus (optional)",
+            "control_entity": "Geschaltet über (optional)"
+          },
+          "data_description": {
+            "name": "Zum Beispiel „Pumpengruppe Heizkörper“.",
+            "flow_entity": "Fühler hinter dem Mischer: die Temperatur des Wassers, das zu den Strängen geht.",
+            "return_entity": "Fühler am gemeinsamen Rücklauf.",
+            "status_entity": "Eine Entität, die zeigt, ob die Pumpe läuft.",
+            "control_entity": "Die Entität, die diese Pumpengruppe oder ihren Heizkreis ein- und ausschaltet. Heizzentrale schaltet sie noch nicht; sie wird benutzt, sobald das Schalten freigegeben ist."
           }
         }
       },
@@ -152,53 +200,57 @@
     },
     "circuit": {
       "initiate_flow": {
-        "user": "Kreis hinzufügen",
-        "reconfigure": "Ändern: Heizkreis oder Strang"
+        "user": "Strang hinzufügen",
+        "reconfigure": "Ändern: Strang"
       },
-      "entry_type": "Heizkreis oder Strang",
+      "entry_type": "Strang",
       "step": {
         "user": {
-          "title": "Heizkreis oder Strang",
-          "description": "Ein Heizkreis oder ein Strang am Verteiler, zum Beispiel ein Stockwerk. Mit Vor- und Rücklauffühler bekommst du die Spreizung.",
+          "title": "Strang",
+          "description": "Schritt 4 von 5. Ein Teil deiner Heizung, der sich einzeln öffnen und schließen lässt, zum Beispiel ein Stockwerk am Verteiler. Hast du keine Stränge, lege einen einzigen für das ganze Haus an.",
           "data": {
             "name": "Name",
             "system_type": "System",
-            "flow_entity": "Vorlauftemperatur",
-            "return_entity": "Rücklauftemperatur",
-            "valve_entity": "Stellantrieb",
+            "flow_entity": "Vorlauftemperatur (optional)",
+            "return_entity": "Rücklauftemperatur (optional)",
+            "valve_entity": "Stellantrieb (optional)",
             "valve_type": "Stellantrieb ohne Strom ist",
-            "power_entity": "Leistung des Stellantriebs"
+            "power_entity": "Leistung des Stellantriebs (optional)",
+            "pump_group": "Pumpengruppe (optional)"
           },
           "data_description": {
             "name": "Zum Beispiel \"Erdgeschoss\".",
             "system_type": "Einrohr: Heizkörper hängen nacheinander an einem Rohr. Zweirohr: Jeder Heizkörper hat eigenen Vor- und Rücklauf. Wenn du unsicher bist, lass Zweirohr.",
             "flow_entity": "Fühler am Rohr zu den Heizkörpern.",
             "return_entity": "Fühler am Rohr, das zurückkommt.",
-            "valve_entity": "Schalter oder Ventil, das diesen Kreis öffnet und schließt. Heizzentrale liest ihn vorerst nur.",
+            "valve_entity": "Schalter oder Ventil, das diesen Strang öffnet und schließt. Heizzentrale liest ihn vorerst nur.",
             "valve_type": "Steht auf dem Antrieb: NC heißt stromlos zu, NO heißt stromlos offen.",
-            "power_entity": "Optional. Zeigt, ob der Antrieb wirklich Strom zieht."
+            "power_entity": "Zeigt, ob der Antrieb wirklich Strom zieht.",
+            "pump_group": "Die Pumpengruppe, die diesen Strang versorgt. Leer lassen, wenn es nur eine gibt."
           }
         },
         "reconfigure": {
-          "title": "Heizkreis oder Strang",
-          "description": "Ein Heizkreis oder ein Strang am Verteiler, zum Beispiel ein Stockwerk. Mit Vor- und Rücklauffühler bekommst du die Spreizung.",
+          "title": "Strang",
+          "description": "Schritt 4 von 5. Ein Teil deiner Heizung, der sich einzeln öffnen und schließen lässt, zum Beispiel ein Stockwerk am Verteiler. Hast du keine Stränge, lege einen einzigen für das ganze Haus an.",
           "data": {
             "name": "Name",
             "system_type": "System",
-            "flow_entity": "Vorlauftemperatur",
-            "return_entity": "Rücklauftemperatur",
-            "valve_entity": "Stellantrieb",
+            "flow_entity": "Vorlauftemperatur (optional)",
+            "return_entity": "Rücklauftemperatur (optional)",
+            "valve_entity": "Stellantrieb (optional)",
             "valve_type": "Stellantrieb ohne Strom ist",
-            "power_entity": "Leistung des Stellantriebs"
+            "power_entity": "Leistung des Stellantriebs (optional)",
+            "pump_group": "Pumpengruppe (optional)"
           },
           "data_description": {
             "name": "Zum Beispiel \"Erdgeschoss\".",
             "system_type": "Einrohr: Heizkörper hängen nacheinander an einem Rohr. Zweirohr: Jeder Heizkörper hat eigenen Vor- und Rücklauf. Wenn du unsicher bist, lass Zweirohr.",
             "flow_entity": "Fühler am Rohr zu den Heizkörpern.",
             "return_entity": "Fühler am Rohr, das zurückkommt.",
-            "valve_entity": "Schalter oder Ventil, das diesen Kreis öffnet und schließt. Heizzentrale liest ihn vorerst nur.",
+            "valve_entity": "Schalter oder Ventil, das diesen Strang öffnet und schließt. Heizzentrale liest ihn vorerst nur.",
             "valve_type": "Steht auf dem Antrieb: NC heißt stromlos zu, NO heißt stromlos offen.",
-            "power_entity": "Optional. Zeigt, ob der Antrieb wirklich Strom zieht."
+            "power_entity": "Zeigt, ob der Antrieb wirklich Strom zieht.",
+            "pump_group": "Die Pumpengruppe, die diesen Strang versorgt. Leer lassen, wenn es nur eine gibt."
           }
         }
       },
@@ -215,38 +267,38 @@
       "step": {
         "user": {
           "title": "Raum",
-          "description": "Ein Raum mit Thermostat. Funktioniert mit Better Thermostat, Versatile Thermostat und jeder anderen climate-Entität.",
+          "description": "Schritt 5 von 5. Ein Raum mit Thermostat. Wähle das Thermostat; Name und Stockwerk kommen aus Home Assistant, wenn du sie leer lässt.",
           "data": {
-            "name": "Name",
+            "name": "Name (optional)",
             "climate_entity": "Thermostat",
-            "circuit": "Kreis",
+            "circuit": "Strang (optional)",
             "floor": "Stockwerk (optional)",
-            "window_entity": "Fensterkontakt"
+            "window_entity": "Fensterkontakt (optional)"
           },
           "data_description": {
-            "name": "Zum Beispiel \"Wohnzimmer\".",
+            "name": "Leer lassen, dann wird der Name des Bereichs des Thermostats genommen.",
             "climate_entity": "Die climate-Entität, die diesen Raum regelt.",
-            "circuit": "Der Kreis, der die Heizkörper dieses Raums versorgt. Ein Raum kann auf einem anderen Stockwerk liegen als sein Kreis.",
+            "circuit": "Der Strang, der die Heizkörper dieses Raums versorgt. Gibt es nur einen Strang, ist er schon ausgewählt.",
             "floor": "Leer lassen: Das Stockwerk kommt aus dem Bereich des Thermostats in Home Assistant. Nur wählen, um das zu überschreiben.",
-            "window_entity": "Optional. Wird in der Hausansicht angezeigt."
+            "window_entity": "Wird in der Hausansicht angezeigt."
           }
         },
         "reconfigure": {
           "title": "Raum",
-          "description": "Ein Raum mit Thermostat. Funktioniert mit Better Thermostat, Versatile Thermostat und jeder anderen climate-Entität.",
+          "description": "Schritt 5 von 5. Ein Raum mit Thermostat. Wähle das Thermostat; Name und Stockwerk kommen aus Home Assistant, wenn du sie leer lässt.",
           "data": {
-            "name": "Name",
+            "name": "Name (optional)",
             "climate_entity": "Thermostat",
-            "circuit": "Kreis",
+            "circuit": "Strang (optional)",
             "floor": "Stockwerk (optional)",
-            "window_entity": "Fensterkontakt"
+            "window_entity": "Fensterkontakt (optional)"
           },
           "data_description": {
-            "name": "Zum Beispiel \"Wohnzimmer\".",
+            "name": "Leer lassen, dann wird der Name des Bereichs des Thermostats genommen.",
             "climate_entity": "Die climate-Entität, die diesen Raum regelt.",
-            "circuit": "Der Kreis, der die Heizkörper dieses Raums versorgt. Ein Raum kann auf einem anderen Stockwerk liegen als sein Kreis.",
+            "circuit": "Der Strang, der die Heizkörper dieses Raums versorgt. Gibt es nur einen Strang, ist er schon ausgewählt.",
             "floor": "Leer lassen: Das Stockwerk kommt aus dem Bereich des Thermostats in Home Assistant. Nur wählen, um das zu überschreiben.",
-            "window_entity": "Optional. Wird in der Hausansicht angezeigt."
+            "window_entity": "Wird in der Hausansicht angezeigt."
           }
         }
       },

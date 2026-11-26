@@ -12,6 +12,7 @@ CONF_OUTDOOR_TEMPERATURE: Final = "outdoor_temperature_entity"
 # Subentry types
 SUBENTRY_HEAT_SOURCE: Final = "heat_source"
 SUBENTRY_BUFFER: Final = "buffer"
+SUBENTRY_PUMP_GROUP: Final = "pump_group"
 SUBENTRY_CIRCUIT: Final = "circuit"
 SUBENTRY_ROOM: Final = "room"
 
@@ -24,7 +25,11 @@ CONF_STATUS: Final = "status_entity"
 CONF_SENSORS: Final = "sensor_entities"
 CONF_VOLUME: Final = "volume"
 
+# Pump group (shares CONF_FLOW, CONF_RETURN and CONF_STATUS)
+CONF_CONTROL: Final = "control_entity"
+
 # Circuit
+CONF_PUMP_GROUP: Final = "pump_group"
 CONF_SYSTEM_TYPE: Final = "system_type"
 CONF_FLOW: Final = "flow_entity"
 CONF_RETURN: Final = "return_entity"
@@ -72,3 +77,5 @@ DEFAULT_MODE: Final = OperatingMode.OBSERVE
 
 FRONTEND_URL: Final = "/heizzentrale_static"
 CARD_FILENAME: Final = "heizzentrale-card.js"
+PANEL_URL_PATH: Final = "heizzentrale"
+PANEL_ELEMENT: Final = "heizzentrale-panel"

@@ -16,17 +16,22 @@ from homeassistant.config_entries import (
 )
 from homeassistant.const import CONF_NAME, UnitOfVolume
 from homeassistant.core import callback
+from homeassistant.helpers import area_registry as ar
+from homeassistant.helpers import device_registry as dr
+from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers import selector
 
 from .const import (
     CONF_BOILER_TEMPERATURE,
     CONF_CIRCUIT,
     CONF_CLIMATE,
+    CONF_CONTROL,
     CONF_FLOOR,
     CONF_FLOW,
     CONF_KIND,
     CONF_OUTDOOR_TEMPERATURE,
     CONF_POWER,
+    CONF_PUMP_GROUP,
     CONF_RETURN,
     CONF_SENSORS,
     CONF_STATUS,
@@ -40,6 +45,7 @@ from .const import (
     SUBENTRY_BUFFER,
     SUBENTRY_CIRCUIT,
     SUBENTRY_HEAT_SOURCE,
+    SUBENTRY_PUMP_GROUP,
     SUBENTRY_ROOM,
     SYSTEM_TYPES,
     ValveType,
@@ -89,6 +95,7 @@ class HeizzentraleConfigFlow(ConfigFlow, domain=DOMAIN):
         return {
             SUBENTRY_HEAT_SOURCE: HeatSourceFlow,
             SUBENTRY_BUFFER: BufferFlow,
+            SUBENTRY_PUMP_GROUP: PumpGroupFlow,
             SUBENTRY_CIRCUIT: CircuitFlow,
             SUBENTRY_ROOM: RoomFlow,
         }
@@ -137,13 +144,23 @@ class _PartFlow(ConfigSubentryFlow):
     def _schema(self) -> vol.Schema:
         raise NotImplementedError
 
+    def _named(self, user_input: dict[str, Any]) -> dict[str, Any]:
+        """Clean the input and make sure the part has a name."""
+        data = _clean(user_input)
+        name = str(data.get(CONF_NAME, "")).strip() or self._default_name(data)
+        data[CONF_NAME] = name
+        return data
+
+    def _default_name(self, data: dict[str, Any]) -> str:
+        """Name used when the form allows leaving it empty."""
+        return ""
+
     async def async_step_user(
         self, user_input: dict[str, Any] | None = None
     ) -> SubentryFlowResult:
         """Add a new part."""
         if user_input is not None:
-            data = _clean(user_input)
-            data[CONF_NAME] = data[CONF_NAME].strip()
+            data = self._named(user_input)
             return self.async_create_entry(title=data[CONF_NAME], data=data)
         return self.async_show_form(step_id="user", data_schema=self._schema())
 
@@ -153,8 +170,7 @@ class _PartFlow(ConfigSubentryFlow):
         """Change an existing part."""
         subentry = self._get_reconfigure_subentry()
         if user_input is not None:
-            data = _clean(user_input)
-            data[CONF_NAME] = data[CONF_NAME].strip()
+            data = self._named(user_input)
             return self.async_update_and_abort(
                 self._get_entry(), subentry, title=data[CONF_NAME], data=data
             )
@@ -208,16 +224,52 @@ class BufferFlow(_PartFlow):
         )
 
 
+class PumpGroupFlow(_PartFlow):
+    """Pump group, with or without mixer, that feeds one or more circuits."""
+
+    def _schema(self) -> vol.Schema:
+        return vol.Schema(
+            {
+                vol.Required(CONF_NAME): _NAME,
+                vol.Optional(CONF_FLOW): _TEMPERATURE,
+                vol.Optional(CONF_RETURN): _TEMPERATURE,
+                vol.Optional(CONF_STATUS): selector.EntitySelector(
+                    selector.EntitySelectorConfig(
+                        domain=["binary_sensor", "switch", "sensor", "climate"]
+                    )
+                ),
+                vol.Optional(CONF_CONTROL): selector.EntitySelector(
+                    selector.EntitySelectorConfig(
+                        domain=["switch", "input_boolean", "climate", "select"]
+                    )
+                ),
+            }
+        )
+
+
 class CircuitFlow(_PartFlow):
     """Heating circuit or one branch of a manifold."""
 
     def _schema(self) -> vol.Schema:
+        groups = [
+            selector.SelectOptionDict(value=subentry.subentry_id, label=subentry.title)
+            for subentry in self._get_entry().subentries.values()
+            if subentry.subentry_type == SUBENTRY_PUMP_GROUP
+        ]
+        feeder: dict[Any, Any] = {}
+        if groups:
+            feeder[vol.Optional(CONF_PUMP_GROUP)] = selector.SelectSelector(
+                selector.SelectSelectorConfig(
+                    options=groups, mode=selector.SelectSelectorMode.DROPDOWN
+                )
+            )
         return vol.Schema(
             {
                 vol.Required(CONF_NAME): _NAME,
                 vol.Required(CONF_SYSTEM_TYPE, default="two_pipe"): _dropdown(
                     SYSTEM_TYPES, "system_type"
                 ),
+                **feeder,
                 vol.Optional(CONF_FLOW): _TEMPERATURE,
                 vol.Optional(CONF_RETURN): _TEMPERATURE,
                 vol.Optional(CONF_VALVE): selector.EntitySelector(
@@ -238,6 +290,22 @@ class CircuitFlow(_PartFlow):
 class RoomFlow(_PartFlow):
     """Room with a thermostat, assigned to a circuit and a floor."""
 
+    def _default_name(self, data: dict[str, Any]) -> str:
+        """Area of the thermostat, else its friendly name."""
+        entity_id: str = data[CONF_CLIMATE]
+        item = er.async_get(self.hass).async_get(entity_id)
+        area_id = item.area_id if item else None
+        if item and area_id is None and item.device_id:
+            device = dr.async_get(self.hass).async_get(item.device_id)
+            area_id = device.area_id if device else None
+        area = ar.async_get(self.hass).async_get_area(area_id) if area_id else None
+        if area is not None:
+            return area.name
+        state = self.hass.states.get(entity_id)
+        if state is not None and state.name:
+            return state.name
+        return entity_id.split(".", 1)[-1].replace("_", " ").title()
+
     def _schema(self) -> vol.Schema:
         circuits = [
             selector.SelectOptionDict(value=subentry.subentry_id, label=subentry.title)
@@ -245,13 +313,15 @@ class RoomFlow(_PartFlow):
             if subentry.subentry_type == SUBENTRY_CIRCUIT
         ]
         schema: dict[Any, Any] = {
-            vol.Required(CONF_NAME): _NAME,
             vol.Required(CONF_CLIMATE): selector.EntitySelector(
                 selector.EntitySelectorConfig(domain="climate")
             ),
+            vol.Optional(CONF_NAME): _NAME,
         }
         if circuits:
-            schema[vol.Optional(CONF_CIRCUIT)] = selector.SelectSelector(
+            # With a single circuit there is nothing to choose.
+            only = circuits[0]["value"] if len(circuits) == 1 else vol.UNDEFINED
+            schema[vol.Optional(CONF_CIRCUIT, default=only)] = selector.SelectSelector(
                 selector.SelectSelectorConfig(
                     options=circuits, mode=selector.SelectSelectorMode.DROPDOWN
                 )
