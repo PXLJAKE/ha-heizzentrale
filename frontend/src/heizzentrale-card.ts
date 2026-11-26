@@ -191,6 +191,7 @@ class HeizzentraleHouseCard extends LitElement {
   private _pendingTarget?: { entity: string; value: number };
   private _targetTimer?: number;
   private _control?: Control;
+  private _adviceTimer?: number;
   private _edit = false;
   private _drag?: Drag;
   private _sensorPlace?: { place: string; name: string };
@@ -235,6 +236,9 @@ class HeizzentraleHouseCard extends LitElement {
     for (const entityId of this._watched) {
       if (previous.states[entityId] !== hass.states[entityId]) {
         this.requestUpdate();
+        // What would be switched depends on these states: ask again soon.
+        window.clearTimeout(this._adviceTimer);
+        this._adviceTimer = window.setTimeout(() => void this._loadControl(), 2500);
         return;
       }
     }
@@ -283,6 +287,7 @@ class HeizzentraleHouseCard extends LitElement {
     super.disconnectedCallback();
     this._resize?.disconnect();
     this._observed = undefined;
+    window.clearTimeout(this._adviceTimer);
   }
 
   protected updated(): void {
@@ -717,6 +722,7 @@ class HeizzentraleHouseCard extends LitElement {
               : nothing}${room.name}</span
           >
           <span class="icons">
+            ${this._edit ? html`<span class="grip" title=${t("edit_grip")}>⠿</span>` : nothing}
             ${windowOpen
               ? html`<span class="badge window" title=${t("window_open")}
                   >${ICON_WINDOW}</span
@@ -858,6 +864,8 @@ class HeizzentraleHouseCard extends LitElement {
   private _dragStart(event: PointerEvent, room: Room): void {
     if (!this._edit || event.button !== 0) return;
     if ((event.target as Element).closest("button")) return;
+    // By touch only the grip drags, so the page can still be scrolled.
+    if (event.pointerType !== "mouse" && !(event.target as Element).closest(".grip")) return;
     (event.currentTarget as Element).setPointerCapture(event.pointerId);
     this._drag = {
       id: room.id,
@@ -1139,6 +1147,7 @@ class HeizzentraleHouseCard extends LitElement {
         <div class="sub ${running ? "status-open" : ""}">
           ${running === undefined ? t("pump_group") : t(running ? "running" : "pump_stopped")}
         </div>
+        ${this._renderWould(this._control?.advice?.pump_groups[group.id]?.action)}
       `,
     );
   }
@@ -1164,9 +1173,16 @@ class HeizzentraleHouseCard extends LitElement {
           <span class="cold">${this._temp(circuit.return_entity)}</span>
         </div>
         <div class="sub status-${status}">${t(status)}</div>
+        ${this._renderWould(this._control?.advice?.circuits[circuit.id]?.action)}
       `,
       `circuit-${status}`,
     );
+  }
+
+  /** "Would close now": what switching would do, shown while only observing. */
+  private _renderWould(action?: string | null) {
+    if (!action) return nothing;
+    return html`<div class="would">${this._t(`would_${action}` as TextKey)}</div>`;
   }
 
   // -- explanations ---------------------------------------------------------
@@ -1218,6 +1234,13 @@ class HeizzentraleHouseCard extends LitElement {
         .filter((room) => room.circuit === circuit.id)
         .map((room) => room.name);
       if (rooms.length) lines.push(t("x_rooms_on", { rooms: rooms.join(", ") }));
+      const advice = this._control?.advice?.circuits[circuit.id];
+      if (advice) {
+        lines.push(
+          t(`x_adv_${advice.reason}` as TextKey, { rooms: advice.rooms.join(", ") }),
+        );
+        if (advice.action) lines.push(t(`x_adv_would_${advice.action}` as TextKey));
+      }
     } else if (selection.kind === "room") {
       const room = plant.rooms.find((item) => item.id === selection.id);
       if (!room) return undefined;
@@ -1269,6 +1292,9 @@ class HeizzentraleHouseCard extends LitElement {
         lines.push(
           t("x_pump_modes", { off: group.control_off_option, on: group.control_on_option }),
         );
+      const advice = this._control?.advice?.pump_groups[group.id];
+      if (advice?.reason === "manual") lines.push(t("x_padv_manual"));
+      else if (advice?.action) lines.push(t(`x_padv_would_${advice.action}` as TextKey));
     } else if (selection.kind === "buffer") {
       const buffer = plant.buffers.find((item) => item.id === selection.id);
       if (!buffer) return undefined;
@@ -2250,6 +2276,14 @@ class HeizzentraleHouseCard extends LitElement {
       opacity: 0.4;
       cursor: default;
     }
+    .would {
+      margin-top: 4px;
+      font-size: 0.7rem;
+      font-weight: 600;
+      padding: 2px 8px;
+      border-radius: 999px;
+      background: color-mix(in srgb, var(--hz-warn) 24%, transparent);
+    }
     .extras {
       margin-top: 6px;
       padding-top: 6px;
@@ -2281,9 +2315,17 @@ class HeizzentraleHouseCard extends LitElement {
       font-size: 0.85rem;
       color: var(--hz-muted);
     }
+    .grip {
+      touch-action: none;
+      cursor: grab;
+      font-size: 1.1rem;
+      line-height: 1;
+      padding: 4px 6px;
+      margin: -4px -4px -4px 0;
+      color: var(--hz-muted);
+    }
     .room.editing {
       cursor: grab;
-      touch-action: none;
       user-select: none;
       border-style: dashed;
     }

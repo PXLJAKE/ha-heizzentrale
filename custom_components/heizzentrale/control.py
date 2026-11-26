@@ -24,6 +24,12 @@ from homeassistant.helpers.event import (
 )
 from homeassistant.util import dt as dt_util
 
+from .const import (
+    CONF_CONTROL_OFF,
+    CONF_CONTROL_ON,
+)
+from .demand import RoomReading, circuit_advice, pump_advice
+from .model import circuit_open, parse_float
 from .scheduling import (
     SOURCE_SCHEDULE,
     Desired,
@@ -145,9 +151,14 @@ class ControlEngine:
         # Rules that currently apply; kept so a restart does not reset them.
         self._active: list[str] = []
         self._status: dict[str, dict[str, Any]] = {}
+        # What would be switched right now, per strand and pump group.
+        self._advice: dict[str, dict[str, Any]] = {"circuits": {}, "pump_groups": {}}
+        # Since when no room of a strand has asked for heat.
+        self._idle_since: dict[str, datetime] = {}
         self._lock = asyncio.Lock()
         self._unsub_time: CALLBACK_TYPE | None = None
         self._unsub_state: CALLBACK_TYPE | None = None
+        self._tracked: list[str] = []
 
     # -- storage ------------------------------------------------------------
 
@@ -191,16 +202,31 @@ class ControlEngine:
             if unsub is not None:
                 unsub()
         self._unsub_time = self._unsub_state = None
+        self._tracked = []
 
     @callback
-    def _track_entities(self) -> None:
-        if self._unsub_state is not None:
-            self._unsub_state()
-            self._unsub_state = None
+    def _track_entities(self, plant: dict[str, Any] | None = None) -> None:
+        """Listen to everything a decision depends on."""
+        plant = plant or self._plant()
         entities = sorted(
             {e for rule in self.rules for e in rule["entities"]}
             | {stove["sensor"] for stove in self.stoves if stove.get("sensor")}
+            # Thermostats, windows and actuators decide which strands are needed.
+            | {r["climate_entity"] for r in plant["rooms"] if r.get("climate_entity")}
+            | {e for r in plant["rooms"] for e in r.get("window_entities", [])}
+            | {c["valve_entity"] for c in plant["circuits"] if c.get("valve_entity")}
+            | {
+                g["control_entity"]
+                for g in plant["pump_groups"]
+                if g.get("control_entity")
+            }
         )
+        if entities == self._tracked:
+            return
+        self._tracked = entities
+        if self._unsub_state is not None:
+            self._unsub_state()
+            self._unsub_state = None
         if entities:
             self._unsub_state = async_track_state_change_event(
                 self.hass, entities, self._on_state
@@ -242,16 +268,93 @@ class ControlEngine:
 
     # -- evaluation ---------------------------------------------------------
 
-    def _rooms(self) -> list[dict[str, Any]]:
-        """Rooms of the plant with thermostat and floor."""
+    def _plant(self) -> dict[str, Any]:
+        """The parts of the plant as the card sees them."""
         # Imported here: the websocket module imports the manager.
         from .websocket_api import async_describe_plants
 
         entry_id = self._manager.entry.entry_id
         for plant in async_describe_plants(self.hass):
             if plant["entry_id"] == entry_id:
-                return plant["rooms"]
-        return []
+                return plant
+        return {"rooms": [], "circuits": [], "pump_groups": []}
+
+    def _reading(self, room: dict[str, Any]) -> RoomReading:
+        state = self.hass.states.get(room.get("climate_entity") or "")
+        attrs = state.attributes if state else {}
+        windows = (self.hass.states.get(e) for e in room.get("window_entities", []))
+        return RoomReading(
+            name=room["name"],
+            state=state.state if state else None,
+            hvac_action=attrs.get("hvac_action"),
+            current=parse_float(attrs.get("current_temperature")),
+            target=parse_float(attrs.get("temperature")),
+            window_open=any(w is not None and w.state == "on" for w in windows),
+        )
+
+    def _pump_is_on(self, group: dict[str, Any]) -> bool | None:
+        """State of a pump group; None if it is in a mode set by hand."""
+        entity_id = group.get("control_entity")
+        state = self.hass.states.get(entity_id) if entity_id else None
+        if state is None or state.state in ("unavailable", "unknown"):
+            return None
+        domain = entity_id.split(".", 1)[0]
+        if domain in ("select", "input_select"):
+            if state.state == group.get(CONF_CONTROL_ON):
+                return True
+            if state.state == group.get(CONF_CONTROL_OFF):
+                return False
+            return None
+        if domain == "climate":
+            return state.state != "off"
+        return state.state == "on"
+
+    def _advise(self, plant: dict[str, Any], now: datetime) -> None:
+        """Work out which strands and pump groups are needed."""
+        circuits: dict[str, dict[str, Any]] = {}
+        for circuit in plant["circuits"]:
+            cid = circuit["id"]
+            readings = [
+                self._reading(room)
+                for room in plant["rooms"]
+                if room.get("circuit") == cid and room.get("climate_entity")
+            ]
+            valve = circuit.get("valve_entity")
+            state = self.hass.states.get(valve) if valve else None
+            is_open = (
+                circuit_open(
+                    state.state if state else None, circuit.get("valve_type") == "no"
+                )
+                if valve
+                else True
+            )
+            idle = (now - self._idle_since.setdefault(cid, now)).total_seconds() / 60
+            advice = circuit_advice(readings, is_open, bool(valve), idle)
+            if advice.reason != "waiting" and advice.wanted:
+                # Heat is asked for (or it cannot be told): the wait restarts.
+                self._idle_since[cid] = now
+            circuits[cid] = {
+                "wanted": advice.wanted,
+                "reason": advice.reason,
+                "action": advice.action,
+                "rooms": advice.rooms,
+            }
+        groups: dict[str, dict[str, Any]] = {}
+        for group in plant["pump_groups"]:
+            wanted = [
+                circuits[c["id"]]["wanted"]
+                for c in plant["circuits"]
+                if c.get("pump_group") == group["id"]
+            ]
+            advice = pump_advice(
+                wanted, self._pump_is_on(group), bool(group.get("control_entity"))
+            )
+            groups[group["id"]] = {
+                "wanted": advice.wanted,
+                "reason": advice.reason,
+                "action": advice.action,
+            }
+        self._advice = {"circuits": circuits, "pump_groups": groups}
 
     def _active_rules(self, now: datetime) -> list[dict[str, Any]]:
         """Rules whose people and devices are all away for long enough."""
@@ -301,7 +404,11 @@ class ControlEngine:
                 changed = True
 
             status: dict[str, dict[str, Any]] = {}
-            for room in self._rooms():
+            plant = self._plant()
+            # The plant is not listed yet while it is still being set up.
+            self._track_entities(plant)
+            self._advise(plant, now)
+            for room in plant["rooms"]:
                 room_id = room["id"]
                 climate = room.get("climate_entity")
                 desired = desired_for_room(
@@ -420,4 +527,5 @@ class ControlEngine:
             "active_rules": self._active,
             "burning": self._burning,
             "rooms": self._status,
+            "advice": self._advice,
         }

@@ -52,6 +52,10 @@ export interface Control {
   active_rules: string[];
   burning?: string[];
   rooms: Record<string, RoomPlan>;
+  advice?: {
+    circuits: Record<string, { wanted: boolean; reason: string; action: string | null; rooms: string[] }>;
+    pump_groups: Record<string, { wanted: boolean; reason: string; action: string | null }>;
+  };
 }
 
 interface Named {
