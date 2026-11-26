@@ -220,14 +220,14 @@
             "name": "Name",
             "climate_entity": "Thermostat",
             "circuit": "Kreis",
-            "floor": "Stockwerk",
+            "floor": "Stockwerk (optional)",
             "window_entity": "Fensterkontakt"
           },
           "data_description": {
             "name": "Zum Beispiel \"Wohnzimmer\".",
             "climate_entity": "Die climate-Entität, die diesen Raum regelt.",
             "circuit": "Der Kreis, der die Heizkörper dieses Raums versorgt. Ein Raum kann auf einem anderen Stockwerk liegen als sein Kreis.",
-            "floor": "Bestimmt, in welcher Zeile der Hausansicht der Raum erscheint.",
+            "floor": "Leer lassen: Das Stockwerk kommt aus dem Bereich des Thermostats in Home Assistant. Nur wählen, um das zu überschreiben.",
             "window_entity": "Optional. Wird in der Hausansicht angezeigt."
           }
         },
@@ -238,14 +238,14 @@
             "name": "Name",
             "climate_entity": "Thermostat",
             "circuit": "Kreis",
-            "floor": "Stockwerk",
+            "floor": "Stockwerk (optional)",
             "window_entity": "Fensterkontakt"
           },
           "data_description": {
             "name": "Zum Beispiel \"Wohnzimmer\".",
             "climate_entity": "Die climate-Entität, die diesen Raum regelt.",
             "circuit": "Der Kreis, der die Heizkörper dieses Raums versorgt. Ein Raum kann auf einem anderen Stockwerk liegen als sein Kreis.",
-            "floor": "Bestimmt, in welcher Zeile der Hausansicht der Raum erscheint.",
+            "floor": "Leer lassen: Das Stockwerk kommt aus dem Bereich des Thermostats in Home Assistant. Nur wählen, um das zu überschreiben.",
             "window_entity": "Optional. Wird in der Hausansicht angezeigt."
           }
         }

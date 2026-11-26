@@ -80,15 +80,44 @@ type Selection =
 // Colours per circuit: taken from the theme where possible so the card fits
 // light and dark themes.
 const CIRCUIT_COLORS = [
-  "var(--blue-color, #2196f3)",
-  "var(--teal-color, #009688)",
-  "var(--purple-color, #9c27b0)",
-  "var(--amber-color, #ffc107)",
-  "var(--pink-color, #e91e63)",
-  "var(--light-green-color, #8bc34a)",
-  "var(--indigo-color, #3f51b5)",
-  "var(--brown-color, #795548)",
+  "#3b82f6",
+  "#14b8a6",
+  "#a855f7",
+  "#f59e0b",
+  "#ec4899",
+  "#84cc16",
+  "#6366f1",
+  "#f97316",
 ];
+
+/** One drawn pipe segment of the house view, in pixels inside the house. */
+interface Pipe {
+  d: string;
+  color: string;
+  active: boolean;
+}
+
+/** Path through the points with rounded corners. */
+function roundedPath(points: [number, number][], radius = 7): string {
+  const n = (value: number) => Math.round(value * 10) / 10;
+  let d = `M${n(points[0][0])} ${n(points[0][1])}`;
+  for (let i = 1; i < points.length - 1; i++) {
+    const [px, py] = points[i - 1];
+    const [x, y] = points[i];
+    const [nx, ny] = points[i + 1];
+    const before = Math.hypot(x - px, y - py);
+    const after = Math.hypot(nx - x, ny - y);
+    const r = Math.min(radius, before / 2, after / 2);
+    if (r < 0.5) {
+      d += ` L${n(x)} ${n(y)}`;
+      continue;
+    }
+    d += ` L${n(x - ((x - px) / before) * r)} ${n(y - ((y - py) / before) * r)}`;
+    d += ` Q${n(x)} ${n(y)} ${n(x + ((nx - x) / after) * r)} ${n(y + ((ny - y) / after) * r)}`;
+  }
+  const last = points[points.length - 1];
+  return `${d} L${n(last[0])} ${n(last[1])}`;
+}
 
 const ACTIVE_SOURCE_STATES = new Set(["on", "heat", "heating", "running", "true"]);
 
@@ -102,6 +131,7 @@ class HeizzentraleHouseCard extends LitElement {
     _error: { state: true },
     _selection: { state: true },
     _config: { state: true },
+    _pipes: { state: true },
   };
 
   private _hass?: Hass;
@@ -111,6 +141,10 @@ class HeizzentraleHouseCard extends LitElement {
   private _selection?: Selection;
   private _loading = false;
   private _watched = new Set<string>();
+  private _pipes: Pipe[] = [];
+  private _pipeSignature = "";
+  private _resize?: ResizeObserver;
+  private _observed?: Element;
 
   static getStubConfig(): CardConfig {
     return {};
@@ -172,6 +206,154 @@ class HeizzentraleHouseCard extends LitElement {
     } finally {
       this._loading = false;
     }
+  }
+
+  // -- pipes ---------------------------------------------------------------
+
+  disconnectedCallback(): void {
+    super.disconnectedCallback();
+    this._resize?.disconnect();
+    this._observed = undefined;
+  }
+
+  protected updated(): void {
+    const house = this.renderRoot.querySelector(".house") ?? undefined;
+    if (house !== this._observed) {
+      this._resize?.disconnect();
+      this._observed = house;
+      if (house && typeof ResizeObserver !== "undefined") {
+        this._resize ??= new ResizeObserver(() => this._measurePipes());
+        this._resize.observe(house);
+      }
+    }
+    this._measurePipes();
+  }
+
+  /** Circuits that supply at least one room, in the order of their lanes. */
+  private _lanes(plant: Plant): Circuit[] {
+    return plant.circuits.filter((circuit) =>
+      plant.rooms.some((room) => room.circuit === circuit.id),
+    );
+  }
+
+  /**
+   * Work out the pipe routes from where the tiles ended up on screen: the
+   * supply line through the plant room, one riser per circuit along the left
+   * wall and a branch under every row of rooms it feeds.
+   */
+  private _measurePipes(): void {
+    const house = this.renderRoot.querySelector<HTMLElement>(".house");
+    const plant = this._plant();
+    const pipes: Pipe[] = [];
+    if (house && plant) {
+      const origin = house.getBoundingClientRect();
+      const box = (element: Element) => {
+        const r = element.getBoundingClientRect();
+        return {
+          top: r.top - origin.top,
+          bottom: r.bottom - origin.top,
+          center: (r.left + r.right) / 2 - origin.left,
+          left: r.left - origin.left,
+        };
+      };
+      const rows = <T extends { bottom: number }>(items: T[]) => {
+        const map = new Map<number, T[]>();
+        for (const item of items) {
+          const key = Math.round(item.bottom);
+          map.set(key, [...(map.get(key) ?? []), item]);
+        }
+        return [...map.entries()].sort((a, b) => a[0] - b[0]).map((entry) => entry[1]);
+      };
+
+      // Supply line: heat source, buffer and circuits hang on one line.
+      const parts = [...house.querySelectorAll("[data-part]")].map(box);
+      const anyOpen = plant.circuits.some((c) => this._circuitOpen(c) !== false);
+      const hot = "var(--hz-hot)";
+      let previous: number | undefined;
+      for (const row of rows(parts)) {
+        const y = row[0].bottom + 8;
+        const first = row[0];
+        const last = row[row.length - 1];
+        if (previous !== undefined) {
+          pipes.push({ d: roundedPath([[first.center, previous], [first.center, y]]), color: hot, active: anyOpen });
+        }
+        if (row.length > 1) {
+          pipes.push({
+            d: roundedPath([
+              [first.center, first.bottom - 6],
+              [first.center, y],
+              [last.center, y],
+              [last.center, last.bottom - 6],
+            ]),
+            color: hot,
+            active: anyOpen,
+          });
+        }
+        for (const part of row.slice(1, -1)) {
+          pipes.push({ d: roundedPath([[part.center, y], [part.center, part.bottom - 6]]), color: hot, active: anyOpen });
+        }
+        previous = y;
+      }
+
+      const lanes = this._lanes(plant);
+      const walls = house.querySelector(".walls");
+      const partsTop = house.querySelector(".parts");
+      const wallLeft = walls ? box(walls).left + 2 : 0;
+      const headerBase = partsTop ? box(partsTop).top : 0;
+      lanes.forEach((circuit, lane) => {
+        const color = CIRCUIT_COLORS[plant.circuits.indexOf(circuit) % CIRCUIT_COLORS.length];
+        const open = this._circuitOpen(circuit) !== false;
+        const x = wallLeft + 9 + lane * 6;
+        const rooms = [...house.querySelectorAll(`[data-circuit="${circuit.id}"]`)].map(
+          (element) => ({ ...box(element), heating: element.classList.contains("heating") }),
+        );
+        let top: number | undefined;
+        for (const row of rows(rooms)) {
+          const y = row[0].bottom + 6 + lane * 4;
+          top = Math.min(top ?? y, y);
+          row.sort((a, b) => a.center - b.center);
+          const last = row[row.length - 1];
+          pipes.push({
+            d: roundedPath([[x, y], [last.center, y], [last.center, last.bottom - 6]]),
+            color,
+            active: open && row.some((room) => room.heating),
+          });
+          for (const room of row.slice(0, -1)) {
+            pipes.push({
+              d: roundedPath([[room.center, y], [room.center, room.bottom - 6]]),
+              color,
+              active: open && room.heating,
+            });
+          }
+        }
+        const tile = house.querySelector(`[data-part="circuit:${circuit.id}"]`);
+        if (tile && top !== undefined) {
+          const from = box(tile);
+          const header = headerBase - 7 - lane * 4;
+          const start = from.center + (lane - (lanes.length - 1) / 2) * 6;
+          pipes.push({
+            d: roundedPath([[start, from.top + 6], [start, header], [x, header], [x, top]]),
+            color,
+            active: open,
+          });
+        }
+      });
+    }
+    const signature = JSON.stringify(pipes);
+    if (signature !== this._pipeSignature) {
+      this._pipeSignature = signature;
+      this._pipes = pipes;
+    }
+  }
+
+  private _renderPipes() {
+    return html`<svg class="pipes" aria-hidden="true">
+      ${this._pipes.map(
+        (pipe) => svg`
+          <path class="tube ${pipe.active ? "active" : ""}" d=${pipe.d} style="stroke:${pipe.color}"/>
+          ${pipe.active ? svg`<path class="flow" d=${pipe.d} style="stroke:${pipe.color}"/>` : nothing}`,
+      )}
+    </svg>`;
   }
 
   // -- helpers --------------------------------------------------------------
@@ -330,7 +512,8 @@ class HeizzentraleHouseCard extends LitElement {
     const below = plant.floors.filter((floor) => (floor.level ?? 0) < 0);
     const rest = plant.rooms.filter((room) => !room.floor || !known.has(room.floor));
     return html`
-      <div class="house">
+      <div class="house" style="--hz-lanes:${this._lanes(plant).length}">
+        ${this._renderPipes()}
         <div class="roof">${ROOF}</div>
         <div class="walls">
           ${above.map((floor) => storey(floor.name, roomsOf(floor.id)))}
@@ -368,6 +551,7 @@ class HeizzentraleHouseCard extends LitElement {
           ${this._isSelected("room", room.id) ? "selected" : ""}"
         role="button"
         tabindex="0"
+        data-circuit=${circuit?.id ?? nothing}
         @click=${() => this._select(selection)}
         @keydown=${(event: KeyboardEvent) => this._key(event, selection)}
       >
@@ -441,12 +625,11 @@ class HeizzentraleHouseCard extends LitElement {
           ${this._isSelected(selection.kind, selection.id) ? "selected" : ""}"
         role="button"
         tabindex="0"
+        data-part="${selection.kind}:${selection.id}"
         @click=${() => this._select(selection)}
         @keydown=${(event: KeyboardEvent) => this._key(event, selection)}
       >
-        <div class="rail flow-rail"></div>
         ${body}
-        <div class="rail return-rail"></div>
       </div>
     `;
   }
@@ -639,9 +822,12 @@ class HeizzentraleHouseCard extends LitElement {
 
   static styles = css`
     :host {
-      --hz-hot: var(--error-color, #db4437);
-      --hz-cold: var(--info-color, #039be5);
-      --hz-ok: var(--success-color, #43a047);
+      --hz-hot: var(--heizzentrale-hot-color, #f2643d);
+      --hz-cold: var(--heizzentrale-cold-color, #3b9dff);
+      --hz-ok: var(--heizzentrale-ok-color, #22b07d);
+      --hz-card: var(--ha-card-background, var(--card-background-color, #fff));
+      --hz-soft: color-mix(in srgb, var(--primary-text-color) 5%, var(--hz-card));
+      --hz-edge: color-mix(in srgb, var(--primary-text-color) 10%, transparent);
       --hz-warn: var(--warning-color, #ffa600);
       --hz-tile: var(--secondary-background-color, #f3f3f3);
       --hz-muted: var(--secondary-text-color, #727272);
@@ -663,7 +849,8 @@ class HeizzentraleHouseCard extends LitElement {
     h2 {
       margin: 0;
       font-size: 1.25rem;
-      font-weight: 500;
+      font-weight: 600;
+      letter-spacing: -0.01em;
     }
     .chips {
       display: flex;
@@ -690,9 +877,46 @@ class HeizzentraleHouseCard extends LitElement {
       padding: 8px 0;
     }
     .house {
-      --hz-line: color-mix(in srgb, var(--primary-text-color) 70%, transparent);
+      --hz-line: color-mix(in srgb, var(--primary-text-color) 55%, transparent);
       --hz-wall: 2px;
+      position: relative;
       padding: 0 14px;
+    }
+    .pipes {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      z-index: 0;
+      pointer-events: none;
+      overflow: visible;
+    }
+    .pipes path {
+      fill: none;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+    }
+    .tube {
+      stroke-width: 3;
+      opacity: 0.22;
+    }
+    .tube.active {
+      opacity: 0.4;
+    }
+    .flow {
+      stroke-width: 3;
+      stroke-dasharray: 1 11;
+      animation: hz-flow 0.9s linear infinite;
+    }
+    @keyframes hz-flow {
+      to {
+        stroke-dashoffset: -12;
+      }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .flow {
+        animation: none;
+      }
     }
     .roof {
       margin: 0 -14px;
@@ -713,7 +937,8 @@ class HeizzentraleHouseCard extends LitElement {
       display: none;
     }
     .storey {
-      padding: 8px 10px 12px;
+      padding: 10px 12px calc(12px + var(--hz-lanes, 0) * 4px)
+        calc(16px + var(--hz-lanes, 0) * 6px);
       border-top: var(--hz-wall) solid var(--hz-line);
     }
     .walls:not(.underground) > .storey:first-child {
@@ -721,43 +946,60 @@ class HeizzentraleHouseCard extends LitElement {
     }
     .ground {
       margin: 0 -14px;
-      border-top: 3px solid color-mix(in srgb, var(--hz-ok) 70%, var(--hz-line));
+      height: 3px;
+      border-radius: 3px;
+      background: linear-gradient(
+        90deg,
+        transparent,
+        var(--hz-ok) 6%,
+        var(--hz-ok) 94%,
+        transparent
+      );
     }
     .underground {
       border-bottom: var(--hz-wall) solid var(--hz-line);
+      border-radius: 0 0 14px 14px;
       background: repeating-linear-gradient(
         135deg,
         transparent 0 9px,
-        color-mix(in srgb, var(--primary-text-color) 5%, transparent) 9px 10px
+        color-mix(in srgb, var(--primary-text-color) 4%, transparent) 9px 10px
       );
     }
     .underground > .storey:first-child {
       border-top: 0;
     }
     .floor-name {
-      font-size: 0.7rem;
-      letter-spacing: 0.08em;
+      font-size: 0.68rem;
+      font-weight: 600;
+      letter-spacing: 0.09em;
       text-transform: uppercase;
       color: var(--hz-muted);
-      margin-bottom: 6px;
+      margin-bottom: 8px;
     }
     .rooms,
     .parts {
       display: grid;
-      gap: 8px;
-      grid-template-columns: repeat(auto-fill, minmax(124px, 1fr));
+      column-gap: 8px;
+      row-gap: calc(10px + var(--hz-lanes, 0) * 4px);
+      grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
     }
     .room,
     .part {
       position: relative;
-      background: var(--card-background-color, transparent);
-      border: 1.5px solid var(--divider-color, #ddd);
-      border-radius: 10px;
+      z-index: 1;
+      background: var(--hz-soft);
+      border: 1px solid var(--hz-edge);
+      border-radius: 14px;
       cursor: pointer;
       outline: none;
       transition:
         box-shadow 0.15s ease,
-        border-color 0.15s ease;
+        border-color 0.15s ease,
+        transform 0.15s ease;
+    }
+    .room:active,
+    .part:active {
+      transform: scale(0.98);
     }
     .room:focus-visible,
     .part:focus-visible,
@@ -765,18 +1007,18 @@ class HeizzentraleHouseCard extends LitElement {
       box-shadow: 0 0 0 2px var(--primary-color);
     }
     .room {
-      padding: 8px 10px;
+      padding: 10px;
       display: flex;
       flex-direction: column;
       gap: 2px;
       min-height: 78px;
     }
     .room.heating {
-      border-color: var(--hz-hot);
-      background: color-mix(
-        in srgb,
-        var(--hz-hot) 7%,
-        var(--card-background-color, transparent)
+      border-color: color-mix(in srgb, var(--hz-hot) 55%, transparent);
+      background: linear-gradient(
+        160deg,
+        color-mix(in srgb, var(--hz-hot) 20%, var(--hz-card)),
+        color-mix(in srgb, var(--hz-hot) 6%, var(--hz-card))
       );
     }
     .room.off {
@@ -816,8 +1058,10 @@ class HeizzentraleHouseCard extends LitElement {
       color: var(--hz-cold);
     }
     .room-temp {
-      font-size: 1.6rem;
-      font-weight: 500;
+      font-size: 1.7rem;
+      font-weight: 600;
+      letter-spacing: -0.02em;
+      font-variant-numeric: tabular-nums;
       line-height: 1.15;
     }
     .unit {
@@ -830,75 +1074,34 @@ class HeizzentraleHouseCard extends LitElement {
     .room-bottom {
       display: flex;
       justify-content: space-between;
+      align-items: center;
       gap: 4px;
       font-size: 0.75rem;
       color: var(--hz-muted);
     }
     .preset {
+      background: color-mix(in srgb, var(--primary-text-color) 8%, transparent);
+      border-radius: 999px;
+      padding: 1px 6px;
+      font-size: 0.7rem;
       overflow: hidden;
       text-overflow: ellipsis;
       white-space: nowrap;
     }
     .parts {
-      gap: 0;
-      row-gap: 10px;
+      margin-top: calc(10px + var(--hz-lanes, 0) * 4px);
+      row-gap: 18px;
+    }
+    .plant-room {
+      padding-bottom: 20px;
     }
     .part {
-      border-radius: 0;
-      border-width: 0;
-      background: var(--card-background-color, transparent);
       padding: 12px 8px;
       display: flex;
       flex-direction: column;
       align-items: center;
       gap: 3px;
       text-align: center;
-    }
-    .rail {
-      position: absolute;
-      left: 0;
-      right: 0;
-      height: 4px;
-      background: var(--divider-color, #ddd);
-    }
-    .flow-rail {
-      top: 0;
-    }
-    .return-rail {
-      bottom: 0;
-    }
-    .flowing .flow-rail {
-      background: repeating-linear-gradient(
-        90deg,
-        var(--hz-hot) 0 10px,
-        color-mix(in srgb, var(--hz-hot) 45%, transparent) 10px 20px
-      );
-      background-size: 20px 4px;
-      animation: hz-right 1.2s linear infinite;
-    }
-    .flowing .return-rail {
-      background: repeating-linear-gradient(
-        90deg,
-        var(--hz-cold) 0 10px,
-        color-mix(in srgb, var(--hz-cold) 45%, transparent) 10px 20px
-      );
-      background-size: 20px 4px;
-      animation: hz-left 1.2s linear infinite;
-    }
-    @keyframes hz-right {
-      to {
-        background-position: 20px 0;
-      }
-    }
-    @keyframes hz-left {
-      to {
-        background-position: -20px 0;
-      }
-    }
-    @media (prefers-reduced-motion: reduce) {
-      .flowing .rail {
-        animation: none;
-      }
     }
     .part-name {
       font-size: 0.85rem;
@@ -934,7 +1137,8 @@ class HeizzentraleHouseCard extends LitElement {
     }
     .big {
       font-size: 1.05rem;
-      font-weight: 500;
+      font-weight: 600;
+      font-variant-numeric: tabular-nums;
     }
     .pair {
       display: flex;
@@ -958,9 +1162,32 @@ class HeizzentraleHouseCard extends LitElement {
     .status-unknown {
       color: var(--hz-warn);
     }
+    @media (max-width: 500px) {
+      ha-card {
+        padding: 12px;
+      }
+      .house {
+        padding: 0 8px;
+      }
+      .roof,
+      .ground {
+        margin: 0 -8px;
+      }
+      .storey {
+        padding-right: 8px;
+        padding-left: calc(12px + var(--hz-lanes, 0) * 6px);
+      }
+      .rooms,
+      .parts {
+        grid-template-columns: repeat(auto-fill, minmax(104px, 1fr));
+      }
+      .room {
+        padding: 8px;
+      }
+    }
     .explain {
       background: var(--hz-tile);
-      border-radius: 12px;
+      border-radius: 14px;
       padding: 12px 14px;
       font-size: 0.9rem;
       line-height: 1.45;

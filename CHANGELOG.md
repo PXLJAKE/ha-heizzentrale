@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.4.0-beta.1
+
+- Floors come from Home Assistant: a room appears on the floor of the area
+  its thermostat (or window contact) is assigned to. Any number of floors
+  works; a floor picked by hand in the room settings still wins.
+- House view: pipe routes are worked out from the layout and drawn from the
+  plant room to every room, one colour per circuit. Open circuits with
+  heating rooms show moving dots (off with "reduce motion").
+- House view: fresher look with softer tiles, own colour palette and
+  rounded lines. The colours can be themed with
+  `--heizzentrale-hot-color`, `--heizzentrale-cold-color` and
+  `--heizzentrale-ok-color`.
+
 ## 0.3.0-beta.1
 
 - House view redrawn as a cross-section of the house: roof, storeys, ground
