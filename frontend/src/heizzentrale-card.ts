@@ -275,8 +275,7 @@ class HeizzentraleHouseCard extends LitElement {
       <ha-card>
         ${this._renderHeader(plant)}
         ${empty ? html`<div class="note">${t("empty")}</div>` : nothing}
-        ${this._renderFloors(plant, colors)}
-        ${this._renderPlantRoom(plant, colors)}
+        ${empty ? nothing : this._renderHouse(plant, colors)}
         ${this._renderExplanation(plant)}
       </ha-card>
     `;
@@ -307,29 +306,43 @@ class HeizzentraleHouseCard extends LitElement {
     `;
   }
 
-  private _renderFloors(plant: Plant, colors: Map<string, string>) {
+  /**
+   * The house as a cross-section: roof, one storey per floor, the ground
+   * line, then everything below ground including the plant room.
+   */
+  private _renderHouse(plant: Plant, colors: Map<string, string>) {
     const t = this._t;
     const known = new Set(plant.floors.map((floor) => floor.id));
-    const rows: { name: string; rooms: Room[] }[] = plant.floors.map((floor) => ({
-      name: floor.name,
-      rooms: plant.rooms.filter((room) => room.floor === floor.id),
-    }));
+    const storey = (name: string, rooms: Room[]) =>
+      rooms.length
+        ? html`
+            <section class="storey">
+              ${name ? html`<div class="floor-name">${name}</div>` : nothing}
+              <div class="rooms">
+                ${rooms.map((room) => this._renderRoom(plant, room, colors))}
+              </div>
+            </section>
+          `
+        : nothing;
+    const roomsOf = (floorId: string) =>
+      plant.rooms.filter((room) => room.floor === floorId);
+    const above = plant.floors.filter((floor) => (floor.level ?? 0) >= 0);
+    const below = plant.floors.filter((floor) => (floor.level ?? 0) < 0);
     const rest = plant.rooms.filter((room) => !room.floor || !known.has(room.floor));
-    if (rest.length) {
-      rows.push({ name: plant.floors.length ? t("other_rooms") : "", rooms: rest });
-    }
-    return rows
-      .filter((row) => row.rooms.length)
-      .map(
-        (row) => html`
-          <section class="floor">
-            ${row.name ? html`<div class="floor-name">${row.name}</div>` : nothing}
-            <div class="rooms">
-              ${row.rooms.map((room) => this._renderRoom(plant, room, colors))}
-            </div>
-          </section>
-        `,
-      );
+    return html`
+      <div class="house">
+        <div class="roof">${ROOF}</div>
+        <div class="walls">
+          ${above.map((floor) => storey(floor.name, roomsOf(floor.id)))}
+          ${storey(plant.floors.length ? t("other_rooms") : "", rest)}
+        </div>
+        <div class="ground"></div>
+        <div class="walls underground">
+          ${below.map((floor) => storey(floor.name, roomsOf(floor.id)))}
+          ${this._renderPlantRoom(plant, colors)}
+        </div>
+      </div>
+    `;
   }
 
   private _renderRoom(plant: Plant, room: Room, colors: Map<string, string>) {
@@ -353,14 +366,17 @@ class HeizzentraleHouseCard extends LitElement {
       <div
         class="room ${heating ? "heating" : ""} ${unavailable ? "off" : ""}
           ${this._isSelected("room", room.id) ? "selected" : ""}"
-        style="--circuit:${circuit ? colors.get(circuit.id) : "transparent"}"
         role="button"
         tabindex="0"
         @click=${() => this._select(selection)}
         @keydown=${(event: KeyboardEvent) => this._key(event, selection)}
       >
         <div class="room-top">
-          <span class="room-name">${room.name}</span>
+          <span class="room-name"
+            >${circuit
+              ? html`<span class="dot" style="background:${colors.get(circuit.id)}"></span>`
+              : nothing}${room.name}</span
+          >
           <span class="icons">
             ${windowOpen
               ? html`<span class="badge window" title=${t("window_open")}
@@ -400,7 +416,7 @@ class HeizzentraleHouseCard extends LitElement {
     }
     const anyOpen = plant.circuits.some((circuit) => this._circuitOpen(circuit) !== false);
     return html`
-      <section class="floor plant-room">
+      <section class="storey plant-room">
         <div class="floor-name">${t("plant_room")}</div>
         <div class="parts">
           ${plant.heat_sources.map((source) => this._renderSource(source, anyOpen))}
@@ -673,9 +689,54 @@ class HeizzentraleHouseCard extends LitElement {
       color: var(--hz-muted);
       padding: 8px 0;
     }
+    .house {
+      --hz-line: color-mix(in srgb, var(--primary-text-color) 70%, transparent);
+      --hz-wall: 2px;
+      padding: 0 14px;
+    }
+    .roof {
+      margin: 0 -14px;
+      height: clamp(56px, 14vw, 132px);
+      color: var(--hz-line);
+    }
+    .roof svg {
+      width: 100%;
+      height: 100%;
+      display: block;
+      overflow: visible;
+    }
+    .walls {
+      border-left: var(--hz-wall) solid var(--hz-line);
+      border-right: var(--hz-wall) solid var(--hz-line);
+    }
+    .walls:empty {
+      display: none;
+    }
+    .storey {
+      padding: 8px 10px 12px;
+      border-top: var(--hz-wall) solid var(--hz-line);
+    }
+    .walls:not(.underground) > .storey:first-child {
+      border-top: 0;
+    }
+    .ground {
+      margin: 0 -14px;
+      border-top: 3px solid color-mix(in srgb, var(--hz-ok) 70%, var(--hz-line));
+    }
+    .underground {
+      border-bottom: var(--hz-wall) solid var(--hz-line);
+      background: repeating-linear-gradient(
+        135deg,
+        transparent 0 9px,
+        color-mix(in srgb, var(--primary-text-color) 5%, transparent) 9px 10px
+      );
+    }
+    .underground > .storey:first-child {
+      border-top: 0;
+    }
     .floor-name {
-      font-size: 0.75rem;
-      letter-spacing: 0.06em;
+      font-size: 0.7rem;
+      letter-spacing: 0.08em;
       text-transform: uppercase;
       color: var(--hz-muted);
       margin-bottom: 6px;
@@ -684,16 +745,19 @@ class HeizzentraleHouseCard extends LitElement {
     .parts {
       display: grid;
       gap: 8px;
-      grid-template-columns: repeat(auto-fill, minmax(148px, 1fr));
+      grid-template-columns: repeat(auto-fill, minmax(124px, 1fr));
     }
     .room,
     .part {
       position: relative;
-      background: var(--hz-tile);
-      border-radius: 12px;
+      background: var(--card-background-color, transparent);
+      border: 1.5px solid var(--divider-color, #ddd);
+      border-radius: 10px;
       cursor: pointer;
       outline: none;
-      transition: box-shadow 0.15s ease;
+      transition:
+        box-shadow 0.15s ease,
+        border-color 0.15s ease;
     }
     .room:focus-visible,
     .part:focus-visible,
@@ -701,15 +765,19 @@ class HeizzentraleHouseCard extends LitElement {
       box-shadow: 0 0 0 2px var(--primary-color);
     }
     .room {
-      padding: 10px 12px 10px 14px;
-      border-left: 4px solid var(--circuit);
+      padding: 8px 10px;
       display: flex;
       flex-direction: column;
       gap: 2px;
-      min-height: 84px;
+      min-height: 78px;
     }
     .room.heating {
-      background: color-mix(in srgb, var(--hz-hot) 12%, var(--hz-tile));
+      border-color: var(--hz-hot);
+      background: color-mix(
+        in srgb,
+        var(--hz-hot) 7%,
+        var(--card-background-color, transparent)
+      );
     }
     .room.off {
       opacity: 0.6;
@@ -722,6 +790,10 @@ class HeizzentraleHouseCard extends LitElement {
       min-height: 20px;
     }
     .room-name {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      min-width: 0;
       font-size: 0.85rem;
       overflow: hidden;
       text-overflow: ellipsis;
@@ -773,18 +845,14 @@ class HeizzentraleHouseCard extends LitElement {
     }
     .part {
       border-radius: 0;
+      border-width: 0;
+      background: var(--card-background-color, transparent);
       padding: 12px 8px;
       display: flex;
       flex-direction: column;
       align-items: center;
       gap: 3px;
       text-align: center;
-    }
-    .part:first-child {
-      border-radius: 12px 0 0 12px;
-    }
-    .part:last-child {
-      border-radius: 0 12px 12px 0;
     }
     .rail {
       position: absolute;
@@ -922,6 +990,14 @@ class HeizzentraleHouseCard extends LitElement {
 
 const ICON_FLAME = svg`<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2c1 3.5-1.5 5-2.5 7C8.4 11 9 12.5 9 12.5S7 12 6.6 9.8C4.9 11.600 4 13.700 4 15.500 4 19.100 7.600 22 12 22s8-2.900 8-6.500C20 10.500 14.500 8 12 2z"/></svg>`;
 const ICON_WINDOW = svg`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="4" y="3" width="16" height="18" rx="1.5"/><path d="M12 3v18M4 12h16"/></svg>`;
+
+// Gable roof with chimney. Stretched to the card width; strokes keep their width.
+const ROOF = svg`<svg viewBox="0 0 100 20" preserveAspectRatio="none" aria-hidden="true">
+  <g fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" stroke-linecap="round">
+    <path vector-effect="non-scaling-stroke" d="M0 20 L50 1 L100 20 Z"/>
+    <path vector-effect="non-scaling-stroke" d="M72 9.360 V3 H78 V11.620"/>
+  </g>
+</svg>`;
 
 function boilerFigure(active: boolean) {
   return svg`<svg viewBox="0 0 44 56" aria-hidden="true">
