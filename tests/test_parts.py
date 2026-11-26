@@ -453,3 +453,45 @@ async def test_windows_and_language(
     await client.send_json_auto_id({"type": "heizzentrale/plants"})
     (plant,) = (await client.receive_json())["result"]["plants"]
     assert plant["language"] == "de"
+
+
+async def test_layout_orders_rooms_and_moves_floors(
+    hass: HomeAssistant, hass_ws_client: WebSocketGenerator
+) -> None:
+    floors = fr.async_get(hass)
+    upper = floors.async_create("Obergeschoss", level=1)
+    rooms = [
+        {"type": "room", "data": {CONF_NAME: name, "climate_entity": f"climate.{name}"}}
+        for name in ("a", "b", "c")
+    ]
+    entry = _entry(*rooms)
+    await _setup(hass, entry)
+    ids = list(entry.subentries)
+    client = await hass_ws_client(hass)
+    await client.send_json_auto_id(
+        {
+            "type": "heizzentrale/layout/save",
+            "entry_id": entry.entry_id,
+            "order": [ids[2], ids[0]],
+            "floors": {ids[2]: upper.floor_id, ids[0]: "gone"},
+            "sensors": [
+                {"id": "x1", "entity": "sensor.flame", "place": f"room:{ids[0]}"}
+            ],
+        }
+    )
+    plant = (await client.receive_json())["result"]["plants"][0]
+    assert [room["name"] for room in plant["rooms"]] == ["c", "a", "b"]
+    assert plant["rooms"][0]["floor"] == upper.floor_id
+    assert plant["rooms"][1]["floor"] is None  # unknown floors are ignored
+    assert plant["floors"] == [
+        {"id": upper.floor_id, "name": "Obergeschoss", "level": 1}
+    ]
+    assert plant["all_floors"] == plant["floors"]
+    assert plant["extra_sensors"][0]["entity"] == "sensor.flame"
+
+    # The arrangement survives a reload.
+    assert await hass.config_entries.async_reload(entry.entry_id)
+    await hass.async_block_till_done()
+    await client.send_json_auto_id({"type": "heizzentrale/plants"})
+    plant = (await client.receive_json())["result"]["plants"][0]
+    assert [room["name"] for room in plant["rooms"]] == ["c", "a", "b"]

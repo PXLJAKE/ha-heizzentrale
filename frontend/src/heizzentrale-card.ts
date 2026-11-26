@@ -77,11 +77,33 @@ interface Plant {
   mode_entity?: string | null;
   outdoor_entity?: string | null;
   heat_sources: HeatSource[];
+  all_floors?: Plant["floors"];
+  extra_sensors?: ExtraSensor[];
+  placed_floors?: Record<string, string>;
   buffers: Buffer[];
   pump_groups?: PumpGroup[];
   circuits: Circuit[];
   rooms: Room[];
   floors: { id: string; name: string; level: number | null }[];
+}
+
+interface ExtraSensor {
+  id: string;
+  entity: string;
+  label: string;
+  place: string;
+}
+
+interface Drag {
+  id: string;
+  startX: number;
+  startY: number;
+  dx: number;
+  dy: number;
+  moved: boolean;
+  overRoom?: string;
+  after?: boolean;
+  overFloor?: string;
 }
 
 interface CardConfig {
@@ -152,6 +174,10 @@ class HeizzentraleHouseCard extends LitElement {
     _view: { state: true },
     _pendingTarget: { state: true },
     _control: { state: true },
+    _edit: { state: true },
+    _drag: { state: true },
+    _sensorPlace: { state: true },
+    _sensorFilter: { state: true },
   };
 
   private _hass?: Hass;
@@ -165,6 +191,10 @@ class HeizzentraleHouseCard extends LitElement {
   private _pendingTarget?: { entity: string; value: number };
   private _targetTimer?: number;
   private _control?: Control;
+  private _edit = false;
+  private _drag?: Drag;
+  private _sensorPlace?: { place: string; name: string };
+  private _sensorFilter = "";
   private _pipes: Pipe[] = [];
   private _pipeSignature = "";
   private _resize?: ResizeObserver;
@@ -530,7 +560,8 @@ class HeizzentraleHouseCard extends LitElement {
         ${this._view === "settings"
           ? this._renderSettings(plant, colors)
           : html`${empty ? nothing : this._renderHouse(plant, colors)}
-            ${this._renderExplanation(plant)} ${this._renderRoomDialog(plant, colors)}`}
+            ${this._renderExplanation(plant)} ${this._renderRoomDialog(plant, colors)}
+            ${this._renderSensorDialog(plant)}`}
       </ha-card>
     `;
   }
@@ -557,6 +588,20 @@ class HeizzentraleHouseCard extends LitElement {
         <h2>${this._config.title || plant.name}</h2>
         <div class="chips">
           ${outdoor}${modeChip}
+          ${this._view === "house" && plant.rooms.length
+            ? html`<button
+                class="chip ${this._edit ? "on" : "icon"}"
+                aria-label=${t(this._edit ? "edit_done" : "edit_house")}
+                title=${t(this._edit ? "edit_done" : "edit_house")}
+                aria-pressed=${this._edit}
+                @click=${() => {
+                  this._selection = undefined;
+                  this._edit = !this._edit;
+                }}
+              >
+                ${this._edit ? t("edit_done") : ICON_PENCIL}
+              </button>`
+            : nothing}
           <button
             class="chip icon ${this._view === "settings" ? "on" : ""}"
             aria-label=${t(this._view === "settings" ? "back" : "settings")}
@@ -564,6 +609,7 @@ class HeizzentraleHouseCard extends LitElement {
             @click=${() => {
               this._selection = undefined;
               this._view = this._view === "settings" ? "house" : "settings";
+              this._edit = false;
               void this._loadControl();
             }}
           >
@@ -581,33 +627,42 @@ class HeizzentraleHouseCard extends LitElement {
   private _renderHouse(plant: Plant, colors: Map<string, string>) {
     const t = this._t;
     const known = new Set(plant.floors.map((floor) => floor.id));
-    const storey = (name: string, rooms: Room[]) =>
-      rooms.length
+    const edit = this._edit;
+    const floors = edit ? (plant.all_floors ?? plant.floors) : plant.floors;
+    const storey = (name: string, rooms: Room[], floorId = "") =>
+      rooms.length || (edit && floorId)
         ? html`
-            <section class="storey">
+            <section
+              class="storey ${this._drag?.moved && this._drag.overFloor === floorId
+                ? "drop"
+                : ""}"
+              data-floor=${floorId}
+            >
               ${name ? html`<div class="floor-name">${name}</div>` : nothing}
               <div class="rooms">
                 ${rooms.map((room) => this._renderRoom(plant, room, colors))}
+                ${rooms.length ? nothing : html`<div class="drop-hint">${t("edit_drop")}</div>`}
               </div>
             </section>
           `
         : nothing;
     const roomsOf = (floorId: string) =>
       plant.rooms.filter((room) => room.floor === floorId);
-    const above = plant.floors.filter((floor) => (floor.level ?? 0) >= 0);
-    const below = plant.floors.filter((floor) => (floor.level ?? 0) < 0);
+    const above = floors.filter((floor) => (floor.level ?? 0) >= 0);
+    const below = floors.filter((floor) => (floor.level ?? 0) < 0);
     const rest = plant.rooms.filter((room) => !room.floor || !known.has(room.floor));
     return html`
       <div class="house" style="--hz-lanes:${this._lanes(plant).length}">
-        ${this._renderPipes()}
+        ${edit ? nothing : this._renderPipes()}
+        ${edit ? html`<p class="edit-note">${t("edit_note")}</p>` : nothing}
         <div class="roof">${ROOF}</div>
         <div class="walls">
-          ${above.map((floor) => storey(floor.name, roomsOf(floor.id)))}
-          ${storey(plant.floors.length ? t("other_rooms") : "", rest)}
+          ${above.map((floor) => storey(floor.name, roomsOf(floor.id), floor.id))}
+          ${storey(floors.length ? t("other_rooms") : "", rest)}
         </div>
         <div class="ground"></div>
         <div class="walls underground">
-          ${below.map((floor) => storey(floor.name, roomsOf(floor.id)))}
+          ${below.map((floor) => storey(floor.name, roomsOf(floor.id), floor.id))}
           ${this._renderPlantRoom(plant, colors)}
         </div>
       </div>
@@ -631,15 +686,29 @@ class HeizzentraleHouseCard extends LitElement {
         : undefined;
     const circuit = plant.circuits.find((item) => item.id === room.circuit);
     const selection: Selection = { kind: "room", id: room.id };
+    const drag = this._drag?.id === room.id && this._drag.moved ? this._drag : undefined;
+    const dropSide =
+      this._drag?.moved && this._drag.overRoom === room.id
+        ? this._drag.after
+          ? "drop-after"
+          : "drop-before"
+        : "";
     return html`
       <div
         class="room ${heating ? "heating" : ""} ${unavailable ? "off" : ""}
-          ${this._isSelected("room", room.id) ? "selected" : ""}"
+          ${this._isSelected("room", room.id) ? "selected" : ""}
+          ${this._edit ? "editing" : ""} ${drag ? "dragging" : ""} ${dropSide}"
+        style=${drag ? `transform:translate(${drag.dx}px,${drag.dy}px)` : nothing}
         role="button"
         tabindex="0"
+        data-room=${room.id}
         data-circuit=${circuit?.id ?? nothing}
-        @click=${() => this._select(selection)}
-        @keydown=${(event: KeyboardEvent) => this._key(event, selection)}
+        @click=${() => !this._edit && this._select(selection)}
+        @keydown=${(event: KeyboardEvent) => !this._edit && this._key(event, selection)}
+        @pointerdown=${(event: PointerEvent) => this._dragStart(event, room)}
+        @pointermove=${(event: PointerEvent) => this._dragMove(event)}
+        @pointerup=${(event: PointerEvent) => this._dragEnd(event, plant)}
+        @pointercancel=${() => (this._drag = undefined)}
       >
         <div class="room-top">
           <span class="room-name"
@@ -686,7 +755,242 @@ class HeizzentraleHouseCard extends LitElement {
               <span>${this._format(this._number(stove.sensor), "°", 0)}</span>
             </div>`;
           })}
+        ${this._renderExtras(plant, `room:${room.id}`)}
+        ${this._edit
+          ? html`<div class="edit-row">
+              <button
+                aria-label=${t("edit_left")}
+                title=${t("edit_left")}
+                @click=${() => this._nudge(plant, room, -1)}
+              >
+                ◀
+              </button>
+              <button
+                class="grow"
+                @click=${() =>
+                  (this._sensorPlace = { place: `room:${room.id}`, name: room.name })}
+              >
+                + ${t("edit_sensor")}
+              </button>
+              <button
+                aria-label=${t("edit_right")}
+                title=${t("edit_right")}
+                @click=${() => this._nudge(plant, room, 1)}
+              >
+                ▶
+              </button>
+            </div>`
+          : nothing}
       </div>
+    `;
+  }
+
+  // -- edit mode ------------------------------------------------------------
+
+  /** Extra sensors the user put on a tile. */
+  private _renderExtras(plant: Plant, place: string) {
+    const extras = (plant.extra_sensors ?? []).filter((item) => item.place === place);
+    if (!extras.length) return nothing;
+    return html`<div class="extras">
+      ${extras.map((item) => {
+        const state = this._state(item.entity);
+        const number = this._number(item.entity);
+        const unit = state?.attributes.unit_of_measurement ?? "";
+        const value =
+          number !== undefined
+            ? this._format(number, unit, Math.abs(number) >= 100 ? 0 : 1)
+            : (state?.state ?? "–");
+        return html`<div class="extra">
+          <span class="extra-name"
+            >${item.label || state?.attributes.friendly_name || item.entity}</span
+          ><span>${value}</span>
+        </div>`;
+      })}
+    </div>`;
+  }
+
+  private async _saveLayout(plant: Plant, change: Record<string, unknown>): Promise<void> {
+    try {
+      const result = await this._hass!.callWS<{ plants: Plant[] }>({
+        type: "heizzentrale/layout/save",
+        entry_id: plant.entry_id,
+        ...change,
+      });
+      this._plants = result.plants;
+      this._error = undefined;
+    } catch (err: any) {
+      this._error = err?.message ?? String(err);
+    }
+  }
+
+  /** Put a room before or after another one, or at the end of a floor. */
+  private _moveRoom(
+    plant: Plant,
+    roomId: string,
+    floorId: string | undefined,
+    other?: string,
+    after = false,
+  ): void {
+    const order = plant.rooms.map((room) => room.id).filter((id) => id !== roomId);
+    const index = other ? order.indexOf(other) : -1;
+    if (index >= 0) order.splice(index + (after ? 1 : 0), 0, roomId);
+    else order.push(roomId);
+    const floors = { ...(plant.placed_floors ?? {}) };
+    if (floorId) floors[roomId] = floorId;
+    else if (floorId === "") delete floors[roomId];
+    // Show the result at once; the answer of the server confirms it.
+    const byId = new Map(plant.rooms.map((room) => [room.id, room]));
+    plant.rooms = order.map((id) => {
+      const room = byId.get(id)!;
+      return id === roomId && floorId ? { ...room, floor: floorId } : room;
+    });
+    this.requestUpdate();
+    void this._saveLayout(plant, { order, floors });
+  }
+
+  /** Move a room one place to the left or right within its floor. */
+  private _nudge(plant: Plant, room: Room, step: number): void {
+    const same = plant.rooms.filter((item) => (item.floor ?? "") === (room.floor ?? ""));
+    const other = same[same.indexOf(room) + step];
+    if (other) this._moveRoom(plant, room.id, undefined, other.id, step > 0);
+  }
+
+  private _dragStart(event: PointerEvent, room: Room): void {
+    if (!this._edit || event.button !== 0) return;
+    if ((event.target as Element).closest("button")) return;
+    (event.currentTarget as Element).setPointerCapture(event.pointerId);
+    this._drag = {
+      id: room.id,
+      startX: event.clientX,
+      startY: event.clientY,
+      dx: 0,
+      dy: 0,
+      moved: false,
+    };
+  }
+
+  private _dragMove(event: PointerEvent): void {
+    const drag = this._drag;
+    if (!drag) return;
+    const dx = event.clientX - drag.startX;
+    const dy = event.clientY - drag.startY;
+    const next: Drag = { ...drag, dx, dy, moved: drag.moved || Math.hypot(dx, dy) > 6 };
+    next.overRoom = next.overFloor = undefined;
+    // The dragged tile lets the pointer through, so this finds what is below.
+    const root = this.renderRoot as ShadowRoot;
+    const below = root.elementsFromPoint?.(event.clientX, event.clientY) ?? [];
+    for (const element of below) {
+      const tile = element.closest?.(".room[data-room]") as HTMLElement | null;
+      if (tile && tile.dataset.room !== drag.id) {
+        const box = tile.getBoundingClientRect();
+        next.overRoom = tile.dataset.room;
+        next.after = event.clientX > box.left + box.width / 2;
+      }
+      const storey = element.closest?.(".storey[data-floor]") as HTMLElement | null;
+      if (storey) {
+        next.overFloor = storey.dataset.floor ?? "";
+        break;
+      }
+    }
+    this._drag = next;
+  }
+
+  private _dragEnd(_event: PointerEvent, plant: Plant): void {
+    const drag = this._drag;
+    this._drag = undefined;
+    if (!drag?.moved || drag.overFloor === undefined) return;
+    this._moveRoom(plant, drag.id, drag.overFloor, drag.overRoom, drag.after);
+  }
+
+  private _renderSensorDialog(plant: Plant) {
+    const target = this._sensorPlace;
+    if (!target) return nothing;
+    const t = this._t;
+    const extras = plant.extra_sensors ?? [];
+    const here = extras.filter((item) => item.place === target.place);
+    const close = () => {
+      this._sensorPlace = undefined;
+      this._sensorFilter = "";
+    };
+    const filter = this._sensorFilter.trim().toLowerCase();
+    const name = (entityId: string) =>
+      String(this._hass?.states[entityId]?.attributes.friendly_name ?? entityId);
+    const candidates = Object.keys(this._hass?.states ?? {})
+      .filter((entityId) => entityId.startsWith("sensor."))
+      .filter(
+        (entityId) =>
+          !filter ||
+          entityId.toLowerCase().includes(filter) ||
+          name(entityId).toLowerCase().includes(filter),
+      )
+      .sort((a, b) => name(a).localeCompare(name(b)))
+      .slice(0, 200);
+    const add = () => {
+      const select = this.renderRoot.querySelector<HTMLSelectElement>("#extra-entity");
+      const label = this.renderRoot.querySelector<HTMLInputElement>("#extra-label");
+      if (!select?.value) return;
+      const item: ExtraSensor = {
+        id: Math.random().toString(36).slice(2, 10),
+        entity: select.value,
+        label: label?.value.trim() ?? "",
+        place: target.place,
+      };
+      if (label) label.value = "";
+      void this._saveLayout(plant, { sensors: [...extras, item] });
+    };
+    return html`
+      <dialog class="backdrop" aria-label=${t("edit_sensor")} @click=${close} @cancel=${close}>
+        <div class="sheet" @click=${(event: Event) => event.stopPropagation()}>
+          <div class="sheet-head">
+            <div>
+              <div class="sheet-title">${t("edit_sensor_title", { name: target.name })}</div>
+              <div class="sheet-sub">${t("edit_sensor_hint")}</div>
+            </div>
+            <button class="close" aria-label=${t("close")} @click=${close}>✕</button>
+          </div>
+          ${here.map(
+            (item) =>
+              html`<div class="extra-row">
+                <span>${item.label || name(item.entity)}</span>
+                <button
+                  class="close"
+                  aria-label=${t("remove")}
+                  @click=${() =>
+                    this._saveLayout(plant, {
+                      sensors: extras.filter((other) => other.id !== item.id),
+                    })}
+                >
+                  ✕
+                </button>
+              </div>`,
+          )}
+          <input
+            class="field"
+            type="search"
+            placeholder=${t("edit_sensor_search")}
+            aria-label=${t("edit_sensor_search")}
+            .value=${this._sensorFilter}
+            @input=${(event: Event) =>
+              (this._sensorFilter = (event.target as HTMLInputElement).value)}
+          />
+          <select id="extra-entity" class="field" aria-label=${t("edit_sensor")}>
+            ${candidates.map(
+              (entityId) => html`<option value=${entityId}>${name(entityId)}</option>`,
+            )}
+          </select>
+          <input
+            id="extra-label"
+            class="field"
+            type="text"
+            maxlength="30"
+            placeholder=${t("edit_sensor_label")}
+            aria-label=${t("edit_sensor_label")}
+          />
+          <button class="wide primary" ?disabled=${!candidates.length} @click=${add}>
+            ${t("edit_sensor_add")}
+          </button>
+        </div>
+      </dialog>
     `;
   }
 
@@ -729,10 +1033,29 @@ class HeizzentraleHouseCard extends LitElement {
         role="button"
         tabindex="0"
         data-part="${selection.kind}:${selection.id}"
-        @click=${() => this._select(selection)}
-        @keydown=${(event: KeyboardEvent) => this._key(event, selection)}
+        @click=${() => !this._edit && this._select(selection)}
+        @keydown=${(event: KeyboardEvent) => !this._edit && this._key(event, selection)}
       >
         ${body}
+        ${this._plant() ? this._renderExtras(this._plant()!, `${selection.kind}:${selection.id}`) : nothing}
+        ${this._edit && selection.kind !== "mode"
+          ? html`<button
+              class="edit-add"
+              @click=${(event: Event) => {
+                event.stopPropagation();
+                this._sensorPlace = {
+                  place: `${selection.kind}:${selection.id}`,
+                  name:
+                    (event.currentTarget as Element)
+                      .closest(".part")
+                      ?.querySelector(".part-name")
+                      ?.textContent?.trim() ?? "",
+                };
+              }}
+            >
+              + ${this._t("edit_sensor")}
+            </button>`
+          : nothing}
       </div>
     `;
   }
@@ -1927,6 +2250,112 @@ class HeizzentraleHouseCard extends LitElement {
       opacity: 0.4;
       cursor: default;
     }
+    .extras {
+      margin-top: 6px;
+      padding-top: 6px;
+      border-top: 1px solid var(--hz-edge);
+      font-size: 0.75rem;
+      color: var(--hz-muted);
+      width: 100%;
+    }
+    .extra,
+    .extra-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 8px;
+    }
+    .extra-name {
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .extra span:last-child {
+      color: var(--primary-text-color);
+      font-variant-numeric: tabular-nums;
+      white-space: nowrap;
+    }
+    .edit-note {
+      margin: 0 0 10px;
+      font-size: 0.85rem;
+      color: var(--hz-muted);
+    }
+    .room.editing {
+      cursor: grab;
+      touch-action: none;
+      user-select: none;
+      border-style: dashed;
+    }
+    .room.dragging {
+      cursor: grabbing;
+      pointer-events: none;
+      z-index: 5;
+      opacity: 0.9;
+      box-shadow: 0 10px 28px rgba(0, 0, 0, 0.28);
+    }
+    .room.drop-before {
+      box-shadow: -4px 0 0 var(--primary-color);
+    }
+    .room.drop-after {
+      box-shadow: 4px 0 0 var(--primary-color);
+    }
+    .storey.drop {
+      background: color-mix(in srgb, var(--primary-color) 9%, transparent);
+    }
+    .drop-hint {
+      font-size: 0.8rem;
+      color: var(--hz-muted);
+      border: 1px dashed var(--hz-edge);
+      border-radius: 14px;
+      padding: 18px 14px;
+    }
+    .edit-row {
+      display: flex;
+      gap: 4px;
+      margin-top: 8px;
+    }
+    .edit-row button,
+    .edit-add {
+      font: inherit;
+      font-size: 0.72rem;
+      color: var(--primary-text-color);
+      background: var(--hz-card);
+      border: 1px solid var(--hz-edge);
+      border-radius: 8px;
+      padding: 5px 7px;
+      cursor: pointer;
+      white-space: nowrap;
+    }
+    .edit-row {
+      flex-wrap: wrap;
+    }
+    .edit-row button {
+      flex: 1;
+    }
+    .edit-row .grow {
+      flex: 1 0 100%;
+      order: 2;
+    }
+    .edit-add {
+      margin-top: 8px;
+    }
+    .sheet .field {
+      font: inherit;
+      font-size: 0.9rem;
+      color: var(--primary-text-color);
+      background: var(--hz-card);
+      border: 1px solid var(--hz-edge);
+      border-radius: 10px;
+      padding: 9px 10px;
+      width: 100%;
+      box-sizing: border-box;
+    }
+    .chip.on {
+      background: var(--primary-color);
+      color: var(--text-primary-color, #fff);
+      cursor: pointer;
+    }
     .stove {
       display: flex;
       align-items: center;
@@ -2142,6 +2571,7 @@ class HeizzentraleHouseCard extends LitElement {
 
 const ICON_FLAME = svg`<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2c1 3.5-1.5 5-2.5 7C8.4 11 9 12.5 9 12.5S7 12 6.6 9.8C4.9 11.600 4 13.700 4 15.500 4 19.100 7.600 22 12 22s8-2.900 8-6.500C20 10.500 14.500 8 12 2z"/></svg>`;
 const ICON_GEAR = svg`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.800 2.800l-.1-.1a1.700 1.700 0 0 0-1.800-.3 1.700 1.700 0 0 0-1 1.500V21a2 2 0 1 1-4 0v-.1a1.700 1.700 0 0 0-1.100-1.500 1.700 1.700 0 0 0-1.800.3l-.1.1a2 2 0 1 1-2.800-2.800l.1-.1a1.700 1.700 0 0 0 .3-1.800 1.700 1.700 0 0 0-1.500-1H3a2 2 0 1 1 0-4h.1a1.700 1.700 0 0 0 1.500-1.100 1.700 1.700 0 0 0-.3-1.800l-.1-.1a2 2 0 1 1 2.800-2.800l.1.1a1.700 1.700 0 0 0 1.800.3h.1a1.700 1.700 0 0 0 1-1.500V3a2 2 0 1 1 4 0v.1a1.700 1.700 0 0 0 1 1.500 1.700 1.700 0 0 0 1.800-.3l.1-.1a2 2 0 1 1 2.800 2.800l-.1.1a1.700 1.700 0 0 0-.3 1.800v.1a1.700 1.700 0 0 0 1.500 1H21a2 2 0 1 1 0 4h-.1a1.700 1.700 0 0 0-1.500 1z"/></svg>`;
+const ICON_PENCIL = svg`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 20h4L19 9l-4-4L4 16v4z"/><path d="M13.500 6.500l4 4"/></svg>`;
 const ICON_HOME = svg`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 11.5 12 4l9 7.500"/><path d="M5.500 10v10h13V10"/></svg>`;
 const ICON_WINDOW = svg`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="4" y="3" width="16" height="18" rx="1.5"/><path d="M12 3v18M4 12h16"/></svg>`;
 

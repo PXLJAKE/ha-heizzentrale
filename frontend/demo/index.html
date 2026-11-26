@@ -81,7 +81,14 @@ if (q.get("panel")) {
 if (q.get("empty")) { for (const k of ["heat_sources", "buffers", "pump_groups", "circuits", "rooms", "floors"]) plant[k] = []; }
 if (q.get("partial")) { plant.rooms = []; plant.floors = []; plant.pump_groups = []; }
 card.setConfig({});
+plant.all_floors = plant.floors;
+plant.extra_sensors = [
+  { id: "x1", entity: "sensor.flamme", label: "Flammraum", place: "source:k" },
+  { id: "x2", entity: "sensor.dg_bad_feuchte", label: "Feuchte", place: "room:r2" },
+];
 Object.assign(states, {
+  "sensor.flamme": { state: "716.5", attributes: { friendly_name: "Flammraumtemperatur", unit_of_measurement: "°C" } },
+  "sensor.dg_bad_feuchte": { state: "58", attributes: { friendly_name: "Bad Luftfeuchte", unit_of_measurement: "%" } },
   "sensor.ofen_eg": { state: "186", attributes: { friendly_name: "Ofenrohr EG", device_class: "temperature", unit_of_measurement: "°C" } },
   "person.jake": { state: "not_home", attributes: { friendly_name: "Jake" } },
   "person.mama": { state: "home", attributes: { friendly_name: "Mama" } },
@@ -107,6 +114,12 @@ if (q.get("empty") || q.get("partial")) { control.schedules = []; control.rules 
 const PRESETS = { comfort: "Komfort", eco: "Eco", sleep: "Schlafen", away: "Abwesend" };
 const hass = () => ({ states: { ...states }, language: q.get("lang") || "de", callWS: async (msg) => {
     if (msg.type === "heizzentrale/control/get") return control;
+    if (msg.type === "heizzentrale/layout/save") {
+      if (msg.sensors) plant.extra_sensors = msg.sensors;
+      if (msg.floors) { plant.placed_floors = msg.floors; for (const room of plant.rooms) if (msg.floors[room.id]) room.floor = msg.floors[room.id]; }
+      if (msg.order) plant.rooms.sort((a, b) => msg.order.indexOf(a.id) - msg.order.indexOf(b.id));
+      return { plants: [plant] };
+    }
     if (msg.type === "heizzentrale/control/save") { for (const k of ["enabled", "schedules", "rules", "stoves"]) if (k in msg) control[k] = msg[k]; return { ...control }; }
     return { plants: [plant] };
   },
@@ -129,6 +142,7 @@ if (q.get("edit")) setTimeout(() => {
   else el._rule = structuredClone(control.rules[1]);
   el.scrollIntoView();
 }, 600);
+if (q.get("arrange")) setTimeout(() => { (card.shadowRoot ? card : document.querySelector("heizzentrale-house-card"))._edit = true; }, 300);
 const pick = q.get("select");
 if (pick) setTimeout(() => { const [kind, id] = pick.split(":"); card._select({ kind, id }); }, 300);
 </script>
