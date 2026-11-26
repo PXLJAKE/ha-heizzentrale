@@ -9,6 +9,53 @@ DOMAIN: Final = "heizzentrale"
 
 CONF_OUTDOOR_TEMPERATURE: Final = "outdoor_temperature_entity"
 
+# Subentry types
+SUBENTRY_HEAT_SOURCE: Final = "heat_source"
+SUBENTRY_BUFFER: Final = "buffer"
+SUBENTRY_CIRCUIT: Final = "circuit"
+SUBENTRY_ROOM: Final = "room"
+
+# Heat source
+CONF_KIND: Final = "kind"
+CONF_BOILER_TEMPERATURE: Final = "boiler_temperature_entity"
+CONF_STATUS: Final = "status_entity"
+
+# Buffer
+CONF_SENSORS: Final = "sensor_entities"
+CONF_VOLUME: Final = "volume"
+
+# Circuit
+CONF_SYSTEM_TYPE: Final = "system_type"
+CONF_FLOW: Final = "flow_entity"
+CONF_RETURN: Final = "return_entity"
+CONF_VALVE: Final = "valve_entity"
+CONF_VALVE_TYPE: Final = "valve_type"
+CONF_POWER: Final = "power_entity"
+
+# Room
+CONF_CLIMATE: Final = "climate_entity"
+CONF_WINDOW: Final = "window_entity"
+CONF_CIRCUIT: Final = "circuit"
+CONF_FLOOR: Final = "floor"
+
+HEAT_SOURCE_KINDS: Final = [
+    "pellet",
+    "wood",
+    "gas",
+    "oil",
+    "heat_pump",
+    "district",
+    "other",
+]
+SYSTEM_TYPES: Final = ["two_pipe", "one_pipe", "underfloor", "other"]
+
+
+class ValveType(StrEnum):
+    """How an actuator behaves without power."""
+
+    NORMALLY_CLOSED = "nc"
+    NORMALLY_OPEN = "no"
+
 
 class OperatingMode(StrEnum):
     """Operating mode of a heating plant.
@@ -22,3 +69,6 @@ class OperatingMode(StrEnum):
 
 
 DEFAULT_MODE: Final = OperatingMode.OBSERVE
+
+FRONTEND_URL: Final = "/heizzentrale_static"
+CARD_FILENAME: Final = "heizzentrale-card.js"

@@ -47,8 +47,34 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: home-assistant/actions/hassfest@07f46fd2e19967768b5fd3000f91f857452b767c # 2026.11.0
 
+  frontend:
+    name: Frontend
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm run build
+      - name: Committed bundle is up to date
+        run: git diff --exit-code -- ../custom_components/heizzentrale/frontend
+      - name: Bundle stays small (limit 100 kB gzip)
+        run: |
+          size=$(gzip -c ../custom_components/heizzentrale/frontend/heizzentrale-card.js | wc -c)
+          echo "Bundle: ${size} bytes gzip"
+          test "$size" -lt 100000
+
   hacs:
     name: HACS validation
+    # The HACS action can only validate public repositories.
+    if: ${{ !github.event.repository.private }}
     runs-on: ubuntu-latest
     steps:
       - uses: hacs/action@d556e736723344f83838d08488c983a15381059a # 22.5.0
