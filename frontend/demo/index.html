@@ -90,6 +90,7 @@ Object.assign(states, {
   "sensor.flamme": { state: "716.5", attributes: { friendly_name: "Flammraumtemperatur", unit_of_measurement: "°C" } },
   "sensor.dg_bad_feuchte": { state: "58", attributes: { friendly_name: "Bad Luftfeuchte", unit_of_measurement: "%" } },
   "sensor.ofen_eg": { state: "186", attributes: { friendly_name: "Ofenrohr EG", device_class: "temperature", unit_of_measurement: "°C" } },
+  "sensor.ofen_og": { state: "24", attributes: { friendly_name: "Ofenrohr OG", device_class: "temperature", unit_of_measurement: "°C" } },
   "person.jake": { state: "not_home", attributes: { friendly_name: "Jake" } },
   "person.mama": { state: "home", attributes: { friendly_name: "Mama" } },
   "device_tracker.jake_iphone": { state: "not_home", attributes: { friendly_name: "Jake iPhone" } },
@@ -97,7 +98,8 @@ Object.assign(states, {
 });
 const WORK = [0, 1, 2, 3, 4];
 const control = { advice: { circuits: { eg: { wanted: true, reason: "rooms_calling", action: null, rooms: ["Wohn-/Esszimmer", "Büro"] }, og: { wanted: true, reason: "rooms_calling", action: null, rooms: ["Wohnzimmer", "Bad"] }, dg: { wanted: false, reason: "no_demand", action: null, rooms: [] }, saal: { wanted: false, reason: "no_demand", action: null, rooms: [] } }, pump_groups: { pg: { wanted: true, reason: "rooms_calling", action: null } } }, enabled: false, active_rules: ["a1"], burning: ["o1"],
-  stoves: [{ id: "o1", name: "Schwedenofen", sensor: "sensor.ofen_eg", on_above: 40, room: "r8", actions: { r8: "off", r9: "off", r10: "preset:eco" } }],
+  stoves: [{ id: "o1", name: "Schwedenofen", sensor: "sensor.ofen_eg", on_above: 40, room: "r8", actions: { r8: "off", r9: "off", r10: "preset:eco" } },
+    { id: "o2", name: "Ofen Flur", sensor: "sensor.ofen_og", on_above: 40, room: null, floor: "og", actions: { r4: "preset:eco" } }],
   schedules: [
     { id: "s1", name: "Werktage", rooms: [], floors: ["eg", "og"], points: [
       { days: WORK, time: "06:00", action: "preset:comfort" }, { days: WORK, time: "22:00", action: "preset:eco" },
