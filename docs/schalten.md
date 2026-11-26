@@ -32,6 +32,10 @@ wird. Sind alle zu, steht dort „würde jetzt ausschalten“. Steht ihre
 Steuer-Entität in einem Modus, den jemand von Hand gewählt hat, bleibt sie
 unangetastet.
 
+Räume, die an keinem Strang hängen, zählen für die Pumpengruppe mit: Solange
+einer von ihnen Wärme will, bleibt sie an. Dasselbe gilt für Stränge, denen
+keine Pumpengruppe zugeordnet ist.
+
 Ein Klick auf den Strang oder die Pumpengruppe nennt den Grund in Worten.
 
 ## Betriebsmodus

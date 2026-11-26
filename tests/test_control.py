@@ -752,3 +752,38 @@ async def test_fahrenheit_thermostats_are_compared_in_celsius(
     reading = control._reading({"name": "Bad", "climate_entity": "climate.bad"})
     assert round(reading.current, 1) == 10.0
     assert round(reading.target, 1) == 20.0
+
+
+async def test_room_without_strand_keeps_the_pump_running(
+    hass: HomeAssistant, freezer: FrozenDateTimeFactory
+) -> None:
+    entry, control = await _switching_plant(hass)
+    switches = _fake_switches(hass)
+    # A second room that hangs on no strand and asks for heat.
+    hass.states.async_set(
+        "climate.flur", "heat", {**ATTRS, "hvac_action": "heating", "temperature": 21}
+    )
+    hass.config_entries.async_add_subentry(
+        entry,
+        ConfigSubentry(
+            data={CONF_NAME: "Flur", "climate_entity": "climate.flur"},
+            subentry_type="room",
+            title="Flur",
+            unique_id=None,
+        ),
+    )
+    await hass.async_block_till_done(wait_background_tasks=True)
+    control = entry.runtime_data.manager.control
+    await _set_mode(hass, entry, "active")
+    freezer.tick(timedelta(minutes=11))
+    await control.async_run()
+    # The strand closes, the pump keeps running for the loose room.
+    assert switches == [("turn_off", "switch.eg_valve", "off")]
+
+    hass.states.async_set(
+        "climate.flur", "heat", {**ATTRS, "hvac_action": "idle", "temperature": 21}
+    )
+    await control.async_run()
+    freezer.tick(timedelta(minutes=11))
+    await control.async_run()
+    assert switches[-1] == ("select_option", "select.hk", "0_aus")
