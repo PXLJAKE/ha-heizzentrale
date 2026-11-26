@@ -51,6 +51,7 @@ from .const import (
     SUBENTRY_ROOM,
     ValveType,
 )
+from .control import RULES_SCHEMA, SCHEDULES_SCHEMA
 from .manager import PlantManager
 
 
@@ -63,6 +64,8 @@ def async_register_websocket_api(hass: HomeAssistant) -> None:
     websocket_api.async_register_command(hass, ws_balancing_calibrate)
     websocket_api.async_register_command(hass, ws_balancing_clear_calibration)
     websocket_api.async_register_command(hass, ws_balancing_log)
+    websocket_api.async_register_command(hass, ws_control_get)
+    websocket_api.async_register_command(hass, ws_control_save)
 
 
 def as_list(value: Any) -> list[str]:
@@ -363,3 +366,45 @@ async def ws_balancing_log(
         return
     await manager.async_log_adjustment(msg["circuit"], msg["turns"], msg.get("note"))
     connection.send_result(msg["id"], _balancing_payload(manager))
+
+
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): "heizzentrale/control/get",
+        vol.Required("entry_id"): str,
+    }
+)
+@callback
+def ws_control_get(
+    hass: HomeAssistant,
+    connection: websocket_api.ActiveConnection,
+    msg: dict[str, Any],
+) -> None:
+    """Return schedules, absence rules and what applies to each room now."""
+    if (manager := _manager(hass, connection, msg)) is not None:
+        connection.send_result(msg["id"], manager.control.payload())
+
+
+@websocket_api.require_admin
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): "heizzentrale/control/save",
+        vol.Required("entry_id"): str,
+        vol.Optional("enabled"): bool,
+        vol.Optional("schedules"): SCHEDULES_SCHEMA,
+        vol.Optional("rules"): RULES_SCHEMA,
+    }
+)
+@websocket_api.async_response
+async def ws_control_save(
+    hass: HomeAssistant,
+    connection: websocket_api.ActiveConnection,
+    msg: dict[str, Any],
+) -> None:
+    """Store schedules and absence rules edited in the card."""
+    if (manager := _manager(hass, connection, msg)) is None:
+        return
+    await manager.control.async_save(
+        msg.get("enabled"), msg.get("schedules"), msg.get("rules")
+    )
+    connection.send_result(msg["id"], manager.control.payload())
