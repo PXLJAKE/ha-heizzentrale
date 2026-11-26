@@ -7,9 +7,9 @@
 <style>
   :root { --primary-color:#03a9f4; --primary-text-color:#212121; --secondary-text-color:#727272;
     --card-background-color:#fff; --secondary-background-color:#f1f3f5; --divider-color:#dcdfe3;
-    --error-color:#db4437; --info-color:#039be5; --success-color:#43a047; --warning-color:#ffa600; --page:#fafafa; }
+    --error-color:#db4437; --info-color:#039be5; --success-color:#43a047; --warning-color:#ffa600; --page:#fafafa; --primary-background-color:#fafafa; }
   :root.dark { --primary-text-color:#e1e1e1; --secondary-text-color:#9b9b9b; --card-background-color:#1c1c1c;
-    --secondary-background-color:#2a2a2a; --divider-color:#3a3a3a; --page:#111; }
+    --secondary-background-color:#2a2a2a; --divider-color:#3a3a3a; --page:#111; --primary-background-color:#111; }
   body { margin:0; padding:16px; background:var(--page); color:var(--primary-text-color);
     font-family: Roboto, "Segoe UI", system-ui, sans-serif; }
   ha-card { display:block; background:var(--card-background-color); border-radius:12px;
@@ -55,7 +55,7 @@ const states = {
 };
 const c = (id, name, system) => ({ id, name, system_type: system, flow_entity: `sensor.${id}_vl`, return_entity: `sensor.${id}_rl`,
   valve_entity: `switch.${id}`, valve_type: "nc", pump_group: "pg", spread_entity: `sensor.${id}_spread`, open_entity: `binary_sensor.${id}_open` });
-const r = (id, name, climate, circuit, floor, win) => ({ id, name, climate_entity: climate, circuit, floor, window_entity: win });
+const r = (id, name, climate, circuit, floor, win) => ({ id, name, climate_entity: climate, circuit, floor, window_entities: win ? [win] : [] });
 const plant = { entry_id: "demo", name: "Heizung", mode_entity: "select.mode", outdoor_entity: "sensor.outside",
   heat_sources: [{ id: "k", name: "Pellematic", kind: "pellet", temperature_entity: "sensor.boiler", status_entity: "sensor.boiler_state" }],
   buffers: [{ id: "p", name: "Puffer", sensor_entities: ["sensor.buf_top", "sensor.buf_mid", "sensor.buf_bottom"], volume: 550, mean_entity: "sensor.buf_mean" }],

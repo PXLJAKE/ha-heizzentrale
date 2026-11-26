@@ -9,6 +9,10 @@ DOMAIN: Final = "heizzentrale"
 
 CONF_OUTDOOR_TEMPERATURE: Final = "outdoor_temperature_entity"
 
+# Options of a plant
+OPT_LANGUAGE: Final = "language"
+LANGUAGES: Final = ["auto", "de", "en"]
+
 # Subentry types
 SUBENTRY_HEAT_SOURCE: Final = "heat_source"
 SUBENTRY_BUFFER: Final = "buffer"

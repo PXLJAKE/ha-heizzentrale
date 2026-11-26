@@ -288,14 +288,14 @@
             "climate_entity": "Thermostat",
             "circuit": "Circuit (optional)",
             "floor": "Floor (optional)",
-            "window_entity": "Window contact (optional)"
+            "window_entity": "Window contacts (optional)"
           },
           "data_description": {
             "name": "Leave empty to use the name of the thermostat's area.",
             "climate_entity": "The climate entity that controls this room.",
             "circuit": "The circuit that supplies the radiators of this room. If there is only one circuit it is chosen for you.",
             "floor": "Leave empty: the floor is taken from the area of the thermostat in Home Assistant. Pick one only to override that.",
-            "window_entity": "Shown in the house view."
+            "window_entity": "All windows and doors of this room. If one of them is open, the room is shown as open."
           }
         },
         "reconfigure": {
@@ -306,14 +306,14 @@
             "climate_entity": "Thermostat",
             "circuit": "Circuit (optional)",
             "floor": "Floor (optional)",
-            "window_entity": "Window contact (optional)"
+            "window_entity": "Window contacts (optional)"
           },
           "data_description": {
             "name": "Leave empty to use the name of the thermostat's area.",
             "climate_entity": "The climate entity that controls this room.",
             "circuit": "The circuit that supplies the radiators of this room. If there is only one circuit it is chosen for you.",
             "floor": "Leave empty: the floor is taken from the area of the thermostat in Home Assistant. Pick one only to override that.",
-            "window_entity": "Shown in the house view."
+            "window_entity": "All windows and doors of this room. If one of them is open, the room is shown as open."
           }
         }
       },
