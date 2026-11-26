@@ -8,10 +8,10 @@ anlegst, ganz ohne eigene Automationen.
 
 !!! warning "Beta"
     Diese Version ist eine Beta. Sie ist zum Ausprobieren gedacht. Texte,
-    Aussehen und Funktionen können sich noch ändern. Stränge und Pumpen
-    werden noch **nicht** geschaltet, Heizzentrale zeigt dort nur, was sie
-    tun würde. Thermostate werden nur umgestellt, wenn du das ausdrücklich
-    einschaltest.
+    Aussehen und Funktionen können sich noch ändern. Nach der Installation
+    zeigt Heizzentrale nur an, was sie tun würde. Thermostate, Stränge,
+    Pumpen und die Heizkurve werden erst verstellt, wenn du das jeweils
+    ausdrücklich einschaltest.
 
 ![Hausansicht](assets/hausansicht-tablet-hell.webp){ loading=lazy }
 
@@ -29,8 +29,14 @@ anlegst, ganz ohne eigene Automationen.
 - **Öfen**: Räume absenken oder ausschalten, solange ein Schwedenofen brennt.
 - **Anordnen**: Räume per Ziehen sortieren und zusätzliche Fühler an jede
   Kachel hängen.
-- **Vorschau aufs Schalten**: an jedem Strang steht, ob er gerade gebraucht
-  wird und was Heizzentrale schalten würde.
+- **Stränge und Pumpe schalten**: an jedem Strang steht, ob er gerade
+  gebraucht wird. Im Modus „Schaltet“ schließt Heizzentrale Stränge, die
+  kein Raum braucht, und schaltet die Pumpengruppe aus.
+- **Offene Fenster** schalten den Raum aus, mit Wartezeit fürs Stoßlüften.
+- **Vorlauf nach Bedarf**: die Heizkurve geht in kleinen Schritten runter,
+  solange alle Räume warm werden, und wieder hoch, wenn einer kalt bleibt.
+- **Rechtzeitig vorheizen**: misst, wie schnell jeder Raum warm wird, und
+  startet so früh, dass er zum Schaltpunkt warm ist.
 
 ## Für wen
 

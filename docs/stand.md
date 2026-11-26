@@ -24,6 +24,7 @@
 
 - Überwachung der Stellantriebe, die bei einem Ausfall von selbst öffnet
 - Komfortprofile (Komfort, Ausgewogen, Sparsam)
+- Fahrenheit in der Ansicht (die Regeln rechnen schon richtig um)
 - „Jetzt zwei Stunden heizen“ je Raum
 - Assistent für den hydraulischen Abgleich in der Ansicht
 - Auswertung von Verbrauch und Laufzeiten

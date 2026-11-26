@@ -20,6 +20,7 @@ from datetime import datetime
 from typing import TYPE_CHECKING, Any
 
 import voluptuous as vol
+from homeassistant.const import UnitOfTemperature
 from homeassistant.core import CALLBACK_TYPE, Event, HomeAssistant, callback
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers import config_validation as cv
@@ -28,6 +29,7 @@ from homeassistant.helpers.event import (
     async_track_time_change,
 )
 from homeassistant.util import dt as dt_util
+from homeassistant.util.unit_conversion import TemperatureConverter
 
 from .const import CONF_CONTROL_OFF, CONF_CONTROL_ON, OperatingMode
 from .demand import RoomReading, circuit_advice, pump_advice, room_calls
@@ -315,6 +317,8 @@ class ControlEngine:
     ) -> None:
         """Store changed settings and apply them right away."""
         if enabled is not None:
+            if self.enabled and not enabled:
+                await self._async_release()
             self.enabled = enabled
         if schedules is not None:
             self.schedules = schedules
@@ -345,6 +349,13 @@ class ControlEngine:
                 return plant
         return {"rooms": [], "circuits": [], "pump_groups": []}
 
+    def _celsius(self, value: float | None) -> float | None:
+        """A thermostat value in °C; thermostats report in the system unit."""
+        unit = self.hass.config.units.temperature_unit
+        if value is None or unit == UnitOfTemperature.CELSIUS:
+            return value
+        return TemperatureConverter.convert(value, unit, UnitOfTemperature.CELSIUS)
+
     def _reading(self, room: dict[str, Any]) -> RoomReading:
         state = self.hass.states.get(room.get("climate_entity") or "")
         attrs = state.attributes if state else {}
@@ -353,8 +364,8 @@ class ControlEngine:
             name=room["name"],
             state=state.state if state else None,
             hvac_action=attrs.get("hvac_action"),
-            current=parse_float(attrs.get("current_temperature")),
-            target=parse_float(attrs.get("temperature")),
+            current=self._celsius(parse_float(attrs.get("current_temperature"))),
+            target=self._celsius(parse_float(attrs.get("temperature"))),
             window_open=any(w is not None and w.state == "on" for w in windows),
         )
 
@@ -526,6 +537,24 @@ class ControlEngine:
             if changed:
                 await self._manager.async_save()
 
+    async def _async_release(self) -> None:
+        """Hand all thermostats back when applying is switched off.
+
+        A room an absence rule, a stove or an open window switched off must
+        not stay off just because nobody is steering it any more.
+        """
+        climates = {
+            room["id"]: room.get("climate_entity") for room in self._plant()["rooms"]
+        }
+        for saved in (self._restore, self._window_saved):
+            for room_id, previous in saved.items():
+                if climate := climates.get(room_id):
+                    await self._async_restore(climate, previous)
+            saved.clear()
+        self._applied.clear()
+        self._applied_at.clear()
+        self._preheating.clear()
+
     def _learn(self, room_id: str, reading: RoomReading, now: datetime) -> bool:
         """Watch how fast a room warms up and what its actions lead to."""
         heating = room_calls(reading) is True and not reading.window_open
@@ -539,6 +568,14 @@ class ControlEngine:
             elif age > NOTE_TARGET_UNTIL:
                 del self._applied_at[room_id]
         return changed
+
+    def _action_target(self, room_id: str, action: str) -> float | None:
+        """Setpoint an action leads to in °C, if known."""
+        target = self.learner.target_for(room_id, action)
+        if action.startswith(PREFIX_TEMPERATURE):
+            # Written by the user in the unit of the system.
+            return self._celsius(target)
+        return target
 
     def _preheated(
         self,
@@ -578,11 +615,11 @@ class ControlEngine:
         self._preheating.pop(room_id, None)
         if wait > self.preheat["max_min"]:
             return desired
-        target = self.learner.target_for(room_id, action)
+        target = self._action_target(room_id, action)
         if target is None:
             return desired
         if desired.action != ACTION_OFF:
-            current_target = self.learner.target_for(room_id, desired.action)
+            current_target = self._action_target(room_id, desired.action)
             if current_target is None:
                 current_target = reading.target
             if current_target is None or target <= current_target + CLOSE_ENOUGH:

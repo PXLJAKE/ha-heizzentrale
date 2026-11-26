@@ -92,6 +92,34 @@ async def test_diagnostics_redacts_name(
     diag = await async_get_config_entry_diagnostics(hass, mock_entry)
     assert "Heizung" not in str(diag)
     assert diag["mode"] == "observe"
+    # Entity ids can carry names of people and rooms; none may show up.
+    manager = mock_entry.runtime_data.manager
+    manager.offsets = {"sensor.jakes_zimmer_vorlauf": 0.4}
+    hass.states.async_set("input_number.omas_kurve", "22")
+    await manager.control.async_save(
+        flow={
+            "entity": "input_number.omas_kurve",
+            "min": 20.0,
+            "max": 22.0,
+            "step": 0.5,
+            "apply": False,
+        },
+        stoves=[
+            {
+                "id": "o1",
+                "name": "Ofen Oma",
+                "sensor": "sensor.oma_ofen",
+                "on_above": 40,
+                "room": None,
+                "floor": None,
+                "actions": {},
+            }
+        ],
+    )
+    text = str(await async_get_config_entry_diagnostics(hass, mock_entry))
+    assert "jake" not in text.lower()
+    assert "oma" not in text.lower()
+    assert "sensor." not in text
 
 
 async def test_card_is_served(hass: HomeAssistant, hass_client) -> None:

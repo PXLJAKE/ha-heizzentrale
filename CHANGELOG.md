@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.13.1-beta.1
+
+- Switching "Apply" off now hands the thermostats back: rooms an absence
+  rule, a stove or an open window switched off are switched on again.
+- Thermostats that report in °F are compared in °C, so the frost guard and
+  all thresholds work in both unit systems.
+- Diagnostics no longer contain entity ids and now include a summary of the
+  control settings (counts and switches only).
+- Brand icon for the integration.
+- Docs and README updated for switching, windows, flow temperature and
+  preheating.
+
 ## 0.13.0-beta.1
 
 - Preheating: Heizzentrale measures how fast each room warms up and, if
