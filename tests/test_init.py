@@ -103,3 +103,27 @@ async def test_card_is_served(hass: HomeAssistant, hass_client) -> None:
     response = await client.get("/heizzentrale_static/heizzentrale-card.js")
     assert response.status == 200
     assert "heizzentrale-house-card" in await response.text()
+
+
+async def test_sidebar_page_registered_with_frontend(hass: HomeAssistant) -> None:
+    """With the frontend loaded the card script and the sidebar page are added."""
+    from unittest.mock import AsyncMock, patch
+
+    from homeassistant.setup import async_setup_component
+
+    hass.config.components.add("frontend")
+    with (
+        patch("homeassistant.components.frontend.add_extra_js_url") as add_js,
+        patch(
+            "homeassistant.components.panel_custom.async_register_panel",
+            AsyncMock(),
+        ) as register,
+    ):
+        assert await async_setup_component(hass, "heizzentrale", {})
+    url = add_js.call_args.args[1]
+    assert url.startswith("/heizzentrale_static/heizzentrale-card.js?v=")
+    kwargs = register.call_args.kwargs
+    assert kwargs["frontend_url_path"] == "heizzentrale"
+    assert kwargs["webcomponent_name"] == "heizzentrale-panel"
+    assert kwargs["module_url"] == url
+    assert kwargs["embed_iframe"] is False

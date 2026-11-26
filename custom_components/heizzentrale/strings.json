@@ -3,23 +3,23 @@
     "step": {
       "user": {
         "title": "Set up your heating plant",
-        "description": "Heizzentrale starts in observe mode: it only measures and explains, it does not switch anything.",
+        "description": "Heizzentrale starts in observe mode: it only measures and explains, it does not switch anything. Afterwards you add heat source, buffer tank, pump group, circuits and rooms one after the other. Only the name is required each time; everything else can be filled in later.",
         "data": {
           "name": "Name of the plant",
-          "outdoor_temperature_entity": "Outdoor temperature sensor"
+          "outdoor_temperature_entity": "Outdoor temperature sensor (optional)"
         },
         "data_description": {
           "name": "Shown in Home Assistant, for example \"Heating\" or the name of your house.",
-          "outdoor_temperature_entity": "Optional. Used later for frost protection and for the evaluation. You can add it at any time."
+          "outdoor_temperature_entity": "Used later for frost protection and for the evaluation. You can add it at any time."
         }
       },
       "reconfigure": {
         "title": "Change plant settings",
         "data": {
-          "outdoor_temperature_entity": "Outdoor temperature sensor"
+          "outdoor_temperature_entity": "Outdoor temperature sensor (optional)"
         },
         "data_description": {
-          "outdoor_temperature_entity": "Optional. Used later for frost protection and for the evaluation."
+          "outdoor_temperature_entity": "Used later for frost protection and for the evaluation."
         }
       }
     },
@@ -71,13 +71,13 @@
       "step": {
         "user": {
           "title": "Heat source",
-          "description": "Boiler, heat pump or any other device that produces heat. All sensors are optional.",
+          "description": "Step 1 of 5. Boiler, heat pump or any other device that produces heat. All sensors are optional.",
           "data": {
             "name": "Name",
             "kind": "Type",
-            "boiler_temperature_entity": "Boiler temperature",
-            "flow_entity": "Flow temperature",
-            "status_entity": "Status"
+            "boiler_temperature_entity": "Boiler temperature (optional)",
+            "flow_entity": "Flow temperature (optional)",
+            "status_entity": "Status (optional)"
           },
           "data_description": {
             "name": "For example \"Pellet boiler\".",
@@ -89,13 +89,13 @@
         },
         "reconfigure": {
           "title": "Heat source",
-          "description": "Boiler, heat pump or any other device that produces heat. All sensors are optional.",
+          "description": "Step 1 of 5. Boiler, heat pump or any other device that produces heat. All sensors are optional.",
           "data": {
             "name": "Name",
             "kind": "Type",
-            "boiler_temperature_entity": "Boiler temperature",
-            "flow_entity": "Flow temperature",
-            "status_entity": "Status"
+            "boiler_temperature_entity": "Boiler temperature (optional)",
+            "flow_entity": "Flow temperature (optional)",
+            "status_entity": "Status (optional)"
           },
           "data_description": {
             "name": "For example \"Pellet boiler\".",
@@ -119,30 +119,78 @@
       "step": {
         "user": {
           "title": "Buffer tank",
-          "description": "A tank that stores hot water. Pick its temperature sensors from top to bottom.",
+          "description": "Step 2 of 5, only if you have one. A tank that stores hot water. Pick its temperature sensors from top to bottom.",
           "data": {
             "name": "Name",
-            "sensor_entities": "Temperature sensors, top first",
-            "volume": "Volume"
+            "sensor_entities": "Temperature sensors, top first (optional)",
+            "volume": "Volume (optional)"
           },
           "data_description": {
             "name": "For example \"Buffer\".",
             "sensor_entities": "The order you pick them in is the order shown in the picture: the first one is the top of the tank.",
-            "volume": "Optional. Used later to estimate the stored energy."
+            "volume": "Used later to estimate the stored energy."
           }
         },
         "reconfigure": {
           "title": "Buffer tank",
-          "description": "A tank that stores hot water. Pick its temperature sensors from top to bottom.",
+          "description": "Step 2 of 5, only if you have one. A tank that stores hot water. Pick its temperature sensors from top to bottom.",
           "data": {
             "name": "Name",
-            "sensor_entities": "Temperature sensors, top first",
-            "volume": "Volume"
+            "sensor_entities": "Temperature sensors, top first (optional)",
+            "volume": "Volume (optional)"
           },
           "data_description": {
             "name": "For example \"Buffer\".",
             "sensor_entities": "The order you pick them in is the order shown in the picture: the first one is the top of the tank.",
-            "volume": "Optional. Used later to estimate the stored energy."
+            "volume": "Used later to estimate the stored energy."
+          }
+        }
+      },
+      "abort": {
+        "reconfigure_successful": "Saved."
+      }
+    },
+    "pump_group": {
+      "initiate_flow": {
+        "user": "Add pump group",
+        "reconfigure": "Change: Pump group"
+      },
+      "entry_type": "Pump group",
+      "step": {
+        "user": {
+          "title": "Pump group",
+          "description": "Step 3 of 5, only if you have one. The pump, with or without mixer, that pushes heating water into one or more circuits, for example into a manifold. When every circuit behind it is closed, it has nothing left to do.",
+          "data": {
+            "name": "Name",
+            "flow_entity": "Flow temperature (optional)",
+            "return_entity": "Return temperature (optional)",
+            "status_entity": "Pump status (optional)",
+            "control_entity": "Switched by (optional)"
+          },
+          "data_description": {
+            "name": "For example \"Radiator pump group\".",
+            "flow_entity": "Sensor behind the mixer: the temperature of the water going to the circuits.",
+            "return_entity": "Sensor on the common return pipe.",
+            "status_entity": "An entity that tells whether the pump is running.",
+            "control_entity": "The entity that turns this pump group or its heating circuit on and off. Heizzentrale does not switch it yet; it is used once switching is enabled."
+          }
+        },
+        "reconfigure": {
+          "title": "Pump group",
+          "description": "Step 3 of 5, only if you have one. The pump, with or without mixer, that pushes heating water into one or more circuits, for example into a manifold. When every circuit behind it is closed, it has nothing left to do.",
+          "data": {
+            "name": "Name",
+            "flow_entity": "Flow temperature (optional)",
+            "return_entity": "Return temperature (optional)",
+            "status_entity": "Pump status (optional)",
+            "control_entity": "Switched by (optional)"
+          },
+          "data_description": {
+            "name": "For example \"Radiator pump group\".",
+            "flow_entity": "Sensor behind the mixer: the temperature of the water going to the circuits.",
+            "return_entity": "Sensor on the common return pipe.",
+            "status_entity": "An entity that tells whether the pump is running.",
+            "control_entity": "The entity that turns this pump group or its heating circuit on and off. Heizzentrale does not switch it yet; it is used once switching is enabled."
           }
         }
       },
@@ -153,21 +201,22 @@
     "circuit": {
       "initiate_flow": {
         "user": "Add circuit",
-        "reconfigure": "Change: Heating circuit"
+        "reconfigure": "Change: Circuit"
       },
-      "entry_type": "Heating circuit",
+      "entry_type": "Circuit",
       "step": {
         "user": {
-          "title": "Heating circuit",
-          "description": "A heating circuit or one branch of a manifold, for example one floor. With flow and return sensors you get the spread.",
+          "title": "Circuit",
+          "description": "Step 4 of 5. One branch of your heating that can be opened and closed on its own, for example one floor on a manifold. If you have no branches, add a single circuit for the whole house.",
           "data": {
             "name": "Name",
             "system_type": "System",
-            "flow_entity": "Flow temperature",
-            "return_entity": "Return temperature",
-            "valve_entity": "Actuator",
+            "flow_entity": "Flow temperature (optional)",
+            "return_entity": "Return temperature (optional)",
+            "valve_entity": "Actuator (optional)",
             "valve_type": "Actuator without power is",
-            "power_entity": "Actuator power"
+            "power_entity": "Actuator power (optional)",
+            "pump_group": "Pump group (optional)"
           },
           "data_description": {
             "name": "For example \"Ground floor\".",
@@ -176,20 +225,22 @@
             "return_entity": "Sensor on the pipe coming back.",
             "valve_entity": "Switch or valve that opens and closes this circuit. Heizzentrale only reads it for now.",
             "valve_type": "Printed on the actuator: NC means closed without power, NO means open without power.",
-            "power_entity": "Optional. Shows whether the actuator really draws power."
+            "power_entity": "Shows whether the actuator really draws power.",
+            "pump_group": "The pump group that feeds this circuit. Leave empty if there is only one."
           }
         },
         "reconfigure": {
-          "title": "Heating circuit",
-          "description": "A heating circuit or one branch of a manifold, for example one floor. With flow and return sensors you get the spread.",
+          "title": "Circuit",
+          "description": "Step 4 of 5. One branch of your heating that can be opened and closed on its own, for example one floor on a manifold. If you have no branches, add a single circuit for the whole house.",
           "data": {
             "name": "Name",
             "system_type": "System",
-            "flow_entity": "Flow temperature",
-            "return_entity": "Return temperature",
-            "valve_entity": "Actuator",
+            "flow_entity": "Flow temperature (optional)",
+            "return_entity": "Return temperature (optional)",
+            "valve_entity": "Actuator (optional)",
             "valve_type": "Actuator without power is",
-            "power_entity": "Actuator power"
+            "power_entity": "Actuator power (optional)",
+            "pump_group": "Pump group (optional)"
           },
           "data_description": {
             "name": "For example \"Ground floor\".",
@@ -198,7 +249,8 @@
             "return_entity": "Sensor on the pipe coming back.",
             "valve_entity": "Switch or valve that opens and closes this circuit. Heizzentrale only reads it for now.",
             "valve_type": "Printed on the actuator: NC means closed without power, NO means open without power.",
-            "power_entity": "Optional. Shows whether the actuator really draws power."
+            "power_entity": "Shows whether the actuator really draws power.",
+            "pump_group": "The pump group that feeds this circuit. Leave empty if there is only one."
           }
         }
       },
@@ -215,38 +267,38 @@
       "step": {
         "user": {
           "title": "Room",
-          "description": "A room with a thermostat. Works with Better Thermostat, Versatile Thermostat and any other climate entity.",
+          "description": "Step 5 of 5. A room with a thermostat. Pick the thermostat; name and floor are taken from Home Assistant if you leave them empty.",
           "data": {
-            "name": "Name",
+            "name": "Name (optional)",
             "climate_entity": "Thermostat",
-            "circuit": "Circuit",
+            "circuit": "Circuit (optional)",
             "floor": "Floor (optional)",
-            "window_entity": "Window contact"
+            "window_entity": "Window contact (optional)"
           },
           "data_description": {
-            "name": "For example \"Living room\".",
+            "name": "Leave empty to use the name of the thermostat's area.",
             "climate_entity": "The climate entity that controls this room.",
-            "circuit": "The circuit that supplies the radiators of this room. A room can be on another floor than its circuit.",
+            "circuit": "The circuit that supplies the radiators of this room. If there is only one circuit it is chosen for you.",
             "floor": "Leave empty: the floor is taken from the area of the thermostat in Home Assistant. Pick one only to override that.",
-            "window_entity": "Optional. Shown in the house view."
+            "window_entity": "Shown in the house view."
           }
         },
         "reconfigure": {
           "title": "Room",
-          "description": "A room with a thermostat. Works with Better Thermostat, Versatile Thermostat and any other climate entity.",
+          "description": "Step 5 of 5. A room with a thermostat. Pick the thermostat; name and floor are taken from Home Assistant if you leave them empty.",
           "data": {
-            "name": "Name",
+            "name": "Name (optional)",
             "climate_entity": "Thermostat",
-            "circuit": "Circuit",
+            "circuit": "Circuit (optional)",
             "floor": "Floor (optional)",
-            "window_entity": "Window contact"
+            "window_entity": "Window contact (optional)"
           },
           "data_description": {
-            "name": "For example \"Living room\".",
+            "name": "Leave empty to use the name of the thermostat's area.",
             "climate_entity": "The climate entity that controls this room.",
-            "circuit": "The circuit that supplies the radiators of this room. A room can be on another floor than its circuit.",
+            "circuit": "The circuit that supplies the radiators of this room. If there is only one circuit it is chosen for you.",
             "floor": "Leave empty: the floor is taken from the area of the thermostat in Home Assistant. Pick one only to override that.",
-            "window_entity": "Optional. Shown in the house view."
+            "window_entity": "Shown in the house view."
           }
         }
       },

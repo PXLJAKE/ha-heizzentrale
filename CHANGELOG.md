@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.6.0-beta.1
+
+- New part "Pump group": the pump, with or without mixer, that feeds one or
+  more circuits. Flow and return temperature, pump status and the entity
+  that will switch it. Shown in the house view and explained on tap. It is
+  only measured for now; switching it off when all circuits are closed comes
+  with the switching step.
+- Sidebar entry "Heizzentrale": the house view as a full page.
+- Simpler setup: a guided checklist in the card, numbered steps in the
+  forms, optional fields marked as such, and a room only needs its
+  thermostat (name from the thermostat's area, the only circuit preselected).
+- German texts use "Strang" throughout.
+
 ## 0.5.0-beta.1
 
 - Tapping a room opens a room window: change the setpoint, pick a preset,

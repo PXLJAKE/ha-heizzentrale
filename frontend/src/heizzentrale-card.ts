@@ -29,6 +29,7 @@ interface Circuit {
   valve_type: string;
   spread_entity?: string | null;
   open_entity?: string | null;
+  pump_group?: string | null;
 }
 
 interface Room {
@@ -57,6 +58,15 @@ interface HeatSource {
   status_entity?: string | null;
 }
 
+interface PumpGroup {
+  id: string;
+  name: string;
+  flow_entity?: string | null;
+  return_entity?: string | null;
+  status_entity?: string | null;
+  control_entity?: string | null;
+}
+
 interface Plant {
   entry_id: string;
   name: string;
@@ -64,6 +74,7 @@ interface Plant {
   outdoor_entity?: string | null;
   heat_sources: HeatSource[];
   buffers: Buffer[];
+  pump_groups?: PumpGroup[];
   circuits: Circuit[];
   rooms: Room[];
   floors: { id: string; name: string; level: number | null }[];
@@ -76,7 +87,7 @@ interface CardConfig {
 }
 
 type Selection =
-  | { kind: "circuit" | "room" | "buffer" | "source"; id: string }
+  | { kind: "circuit" | "room" | "buffer" | "source" | "pump"; id: string }
   | { kind: "mode" };
 
 // Colours per circuit: taken from the theme where possible so the card fits
@@ -453,6 +464,7 @@ class HeizzentraleHouseCard extends LitElement {
       !plant.rooms.length &&
       !plant.circuits.length &&
       !plant.buffers.length &&
+      !plant.pump_groups?.length &&
       !plant.heat_sources.length;
 
     const colors = new Map<string, string>();
@@ -464,7 +476,7 @@ class HeizzentraleHouseCard extends LitElement {
       <ha-card>
         ${this._renderHeader(plant)}
         ${empty && this._view === "house"
-          ? html`<div class="note">${t("empty")}</div>`
+          ? html`<div class="settings">${this._renderSetup(plant)}</div>`
           : nothing}
         ${this._view === "settings"
           ? this._renderSettings(plant, colors)
@@ -621,7 +633,12 @@ class HeizzentraleHouseCard extends LitElement {
 
   private _renderPlantRoom(plant: Plant, colors: Map<string, string>) {
     const t = this._t;
-    if (!plant.heat_sources.length && !plant.buffers.length && !plant.circuits.length) {
+    if (
+      !plant.heat_sources.length &&
+      !plant.buffers.length &&
+      !plant.circuits.length &&
+      !plant.pump_groups?.length
+    ) {
       return nothing;
     }
     const anyOpen = plant.circuits.some((circuit) => this._circuitOpen(circuit) !== false);
@@ -631,6 +648,7 @@ class HeizzentraleHouseCard extends LitElement {
         <div class="parts">
           ${plant.heat_sources.map((source) => this._renderSource(source, anyOpen))}
           ${plant.buffers.map((buffer) => this._renderBuffer(buffer, anyOpen))}
+          ${(plant.pump_groups ?? []).map((group) => this._renderPumpGroup(plant, group))}
           ${plant.circuits.map((circuit) =>
             this._renderCircuit(circuit, colors.get(circuit.id) ?? "gray"),
           )}
@@ -705,6 +723,39 @@ class HeizzentraleHouseCard extends LitElement {
         </div>
         <div class="sub">
           ${buffer.volume ? `${this._format(buffer.volume, "l", 0)}` : nothing}
+        </div>
+      `,
+    );
+  }
+
+  /** true = running, false = stopped, undefined = no status entity. */
+  private _pumpRunning(group: PumpGroup): boolean | undefined {
+    const state = this._state(group.status_entity)?.state?.toLowerCase();
+    if (!state || state === "unavailable" || state === "unknown") return undefined;
+    return ACTIVE_SOURCE_STATES.has(state);
+  }
+
+  private _renderPumpGroup(plant: Plant, group: PumpGroup) {
+    const t = this._t;
+    const running = this._pumpRunning(group);
+    const needed = plant.circuits
+      .filter((circuit) => circuit.pump_group === group.id)
+      .some((circuit) => this._circuitOpen(circuit) !== false);
+    return this._part(
+      { kind: "pump", id: group.id },
+      needed,
+      html`
+        <div class="part-name">${group.name}</div>
+        <div class="figure">${pumpFigure(running ?? needed)}</div>
+        <div class="big">${group.flow_entity ? this._temp(group.flow_entity) : "–"}</div>
+        ${group.return_entity
+          ? html`<div class="pair">
+              <span class="hot">${this._temp(group.flow_entity)}</span>
+              <span class="cold">${this._temp(group.return_entity)}</span>
+            </div>`
+          : nothing}
+        <div class="sub ${running ? "status-open" : ""}">
+          ${running === undefined ? t("pump_group") : t(running ? "running" : "pump_stopped")}
         </div>
       `,
     );
@@ -812,6 +863,26 @@ class HeizzentraleHouseCard extends LitElement {
         );
       const circuit = plant.circuits.find((item) => item.id === room.circuit);
       if (circuit) lines.push(t("x_room_circuit", { circuit: circuit.name }));
+    } else if (selection.kind === "pump") {
+      const group = plant.pump_groups?.find((item) => item.id === selection.id);
+      if (!group) return undefined;
+      title = group.name;
+      lines.push(t("x_pump", { name: group.name }));
+      if (group.flow_entity)
+        lines.push(t("x_pump_flow", { temp: this._temp(group.flow_entity) }));
+      const fed = plant.circuits.filter((circuit) => circuit.pump_group === group.id);
+      if (fed.length) {
+        const open = fed.filter((circuit) => this._circuitOpen(circuit) !== false);
+        lines.push(
+          open.length
+            ? t("x_pump_needed", { circuits: open.map((c) => c.name).join(", ") })
+            : t("x_pump_idle"),
+        );
+      }
+      const running = this._pumpRunning(group);
+      if (running !== undefined)
+        lines.push(t(running ? "x_pump_running" : "x_pump_stopped"));
+      lines.push(t(group.control_entity ? "x_pump_control" : "x_pump_no_control"));
     } else if (selection.kind === "buffer") {
       const buffer = plant.buffers.find((item) => item.id === selection.id);
       if (!buffer) return undefined;
@@ -1029,6 +1100,50 @@ class HeizzentraleHouseCard extends LitElement {
     );
   }
 
+  /** The setup as a short list in the order that makes sense. */
+  private _renderSetup(plant: Plant) {
+    const t = this._t;
+    const steps: { key: string; done: boolean; optional: boolean }[] = [
+      { key: "source", done: plant.heat_sources.length > 0, optional: false },
+      { key: "buffer", done: plant.buffers.length > 0, optional: true },
+      { key: "pump", done: (plant.pump_groups?.length ?? 0) > 0, optional: true },
+      { key: "circuits", done: plant.circuits.length > 0, optional: false },
+      { key: "rooms", done: plant.rooms.length > 0, optional: false },
+    ];
+    const open = steps.filter((step) => !step.done && !step.optional).length;
+    return html`
+      <section class="set setup">
+        <h3>${t("setup_title")}</h3>
+        <p class="hint first">${t(open ? "setup_intro" : "setup_done")}</p>
+        <ol class="steps">
+          ${steps.map(
+            (step, index) => html`
+              <li class=${step.done ? "done" : ""}>
+                <span class="step-mark">${step.done ? "✓" : index + 1}</span>
+                <div>
+                  <div class="row-name">
+                    ${t(`setup_${step.key}` as TextKey)}
+                    ${step.optional && !step.done
+                      ? html`<span class="row-detail">${t("setup_optional")}</span>`
+                      : nothing}
+                  </div>
+                  <div class="row-detail">${t(`setup_${step.key}_hint` as TextKey)}</div>
+                </div>
+              </li>
+            `,
+          )}
+        </ol>
+        <button
+          class="wide primary"
+          @click=${() => this._navigate("/config/integrations/integration/heizzentrale")}
+        >
+          ${t("edit_parts")}
+        </button>
+        <p class="hint">${t("edit_hint")}</p>
+      </section>
+    `;
+  }
+
   private _renderSettings(plant: Plant, colors: Map<string, string>) {
     const t = this._t;
     const modeState = this._state(plant.mode_entity);
@@ -1056,6 +1171,7 @@ class HeizzentraleHouseCard extends LitElement {
       parts.filter(Boolean).join(" · ");
     return html`
       <div class="settings">
+        ${this._renderSetup(plant)}
         <section class="set">
           <h3>${t("set_mode")}</h3>
           <div class="choices">
@@ -1102,6 +1218,26 @@ class HeizzentraleHouseCard extends LitElement {
           ),
         )}
         ${section(
+          t("set_pumps"),
+          (plant.pump_groups ?? []).map((group) =>
+            row(
+              group.name,
+              join([
+                t("n_circuits", {
+                  count: String(
+                    plant.circuits.filter((circuit) => circuit.pump_group === group.id).length,
+                  ),
+                }),
+                group.control_entity ? t("pump_switchable") : "",
+              ]),
+              [
+                ...(group.flow_entity ? [] : [t("warn_no_sensor")]),
+                ...(group.control_entity ? [] : [t("warn_no_control")]),
+              ],
+            ),
+          ),
+        )}
+        ${section(
           t("set_circuits"),
           plant.circuits.map((circuit) => {
             const count = plant.rooms.filter((room) => room.circuit === circuit.id).length;
@@ -1142,15 +1278,6 @@ class HeizzentraleHouseCard extends LitElement {
             );
           }),
         )}
-        <section class="set">
-          <button
-            class="wide primary"
-            @click=${() => this._navigate("/config/integrations/integration/heizzentrale")}
-          >
-            ${t("edit_parts")}
-          </button>
-          <p class="hint">${t("edit_hint")}</p>
-        </section>
       </div>
     `;
   }
@@ -1770,6 +1897,44 @@ class HeizzentraleHouseCard extends LitElement {
       font-size: 0.8rem;
       color: color-mix(in srgb, var(--hz-warn) 75%, var(--primary-text-color));
     }
+    .steps {
+      list-style: none;
+      margin: 10px 0 12px;
+      padding: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    .steps li {
+      display: flex;
+      gap: 10px;
+      align-items: flex-start;
+    }
+    .steps .row-name {
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+    .step-mark {
+      flex: none;
+      width: 26px;
+      height: 26px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.8rem;
+      font-weight: 600;
+      background: var(--hz-soft);
+      border: 1px solid var(--hz-edge);
+    }
+    .done .step-mark {
+      background: var(--hz-ok);
+      border-color: var(--hz-ok);
+      color: #fff;
+    }
+    .hint.first {
+      margin-top: 0;
+    }
     .hint {
       margin: 8px 0 0;
       font-size: 0.82rem;
@@ -1818,6 +1983,16 @@ const ROOF = svg`<svg viewBox="0 0 100 20" preserveAspectRatio="none" aria-hidde
     <path vector-effect="non-scaling-stroke" d="M72 9.360 V3 H78 V11.620"/>
   </g>
 </svg>`;
+
+function pumpFigure(running: boolean) {
+  const color = running ? "var(--hz-ok)" : "currentColor";
+  const opacity = running ? "1" : "0.4";
+  return svg`<svg viewBox="0 0 56 56" aria-hidden="true">
+    <path d="M4 28 H14 M42 28 H52" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" opacity="0.4"/>
+    <circle cx="28" cy="28" r="14" fill="none" stroke=${color} stroke-width="2.5" opacity=${opacity}/>
+    <path d="M22 19.500 L38 28 L22 36.500 Z" fill=${running ? color : "none"} stroke=${color} stroke-width="2.5" stroke-linejoin="round" opacity=${opacity}/>
+  </svg>`;
+}
 
 function boilerFigure(active: boolean) {
   return svg`<svg viewBox="0 0 44 56" aria-hidden="true">
@@ -1868,6 +2043,69 @@ function valveFigure(status: "open" | "closed" | "unknown") {
         : nothing
     }
   </svg>`;
+}
+
+// ---------------------------------------------------------------------------
+// Sidebar page: the house view as a full page
+// ---------------------------------------------------------------------------
+
+class HeizzentralePanel extends LitElement {
+  static properties = { narrow: { type: Boolean, reflect: true } };
+
+  narrow = false;
+  private _hass?: Hass;
+
+  set hass(hass: Hass) {
+    this._hass = hass;
+    const card = this.renderRoot?.querySelector("heizzentrale-house-card") as any;
+    if (card) card.hass = hass;
+    // The menu button needs hass too; it only appears on narrow screens.
+    const menu = this.renderRoot?.querySelector("ha-menu-button") as any;
+    if (menu) menu.hass = hass;
+  }
+
+  protected firstUpdated(): void {
+    const card = this.renderRoot.querySelector("heizzentrale-house-card") as any;
+    card.setConfig({});
+    if (this._hass) this.hass = this._hass;
+  }
+
+  protected render() {
+    return html`
+      <div class="bar">
+        <ha-menu-button .narrow=${this.narrow}></ha-menu-button>
+      </div>
+      <main><heizzentrale-house-card></heizzentrale-house-card></main>
+    `;
+  }
+
+  static styles = css`
+    :host {
+      display: block;
+      min-height: 100vh;
+      box-sizing: border-box;
+      background: var(--primary-background-color);
+      color: var(--primary-text-color);
+    }
+    .bar {
+      height: 0;
+      position: relative;
+      z-index: 2;
+    }
+    ha-menu-button {
+      position: absolute;
+      top: 4px;
+      left: 4px;
+    }
+    main {
+      max-width: 1100px;
+      margin: 0 auto;
+      padding: 16px;
+    }
+    :host([narrow]) main {
+      padding: 52px 8px 8px;
+    }
+  `;
 }
 
 // ---------------------------------------------------------------------------
@@ -1973,6 +2211,7 @@ class HeizzentraleHouseCardEditor extends LitElement {
 if (!customElements.get("heizzentrale-house-card")) {
   customElements.define("heizzentrale-house-card", HeizzentraleHouseCard);
   customElements.define("heizzentrale-house-card-editor", HeizzentraleHouseCardEditor);
+  customElements.define("heizzentrale-panel", HeizzentralePanel);
   const cards = ((window as any).customCards ??= []);
   cards.push({
     type: "heizzentrale-house-card",

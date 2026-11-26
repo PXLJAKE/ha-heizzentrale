@@ -24,11 +24,13 @@ from .const import (
     CONF_BOILER_TEMPERATURE,
     CONF_CIRCUIT,
     CONF_CLIMATE,
+    CONF_CONTROL,
     CONF_FLOOR,
     CONF_FLOW,
     CONF_KIND,
     CONF_OUTDOOR_TEMPERATURE,
     CONF_POWER,
+    CONF_PUMP_GROUP,
     CONF_RETURN,
     CONF_SENSORS,
     CONF_STATUS,
@@ -41,6 +43,7 @@ from .const import (
     SUBENTRY_BUFFER,
     SUBENTRY_CIRCUIT,
     SUBENTRY_HEAT_SOURCE,
+    SUBENTRY_PUMP_GROUP,
     SUBENTRY_ROOM,
     ValveType,
 )
@@ -92,6 +95,7 @@ def async_describe_plants(hass: HomeAssistant) -> list[dict[str, Any]]:
             "outdoor_entity": entry.data.get(CONF_OUTDOOR_TEMPERATURE),
             "heat_sources": [],
             "buffers": [],
+            "pump_groups": [],
             "circuits": [],
             "rooms": [],
             "floors": [],
@@ -119,6 +123,16 @@ def async_describe_plants(hass: HomeAssistant) -> list[dict[str, Any]]:
                         "mean_entity": own(Platform.SENSOR, f"{sid}_buffer_mean"),
                     }
                 )
+            elif subentry.subentry_type == SUBENTRY_PUMP_GROUP:
+                plant["pump_groups"].append(
+                    base
+                    | {
+                        "flow_entity": data.get(CONF_FLOW),
+                        "return_entity": data.get(CONF_RETURN),
+                        "status_entity": data.get(CONF_STATUS),
+                        "control_entity": data.get(CONF_CONTROL),
+                    }
+                )
             elif subentry.subentry_type == SUBENTRY_CIRCUIT:
                 plant["circuits"].append(
                     base
@@ -131,6 +145,7 @@ def async_describe_plants(hass: HomeAssistant) -> list[dict[str, Any]]:
                             CONF_VALVE_TYPE, ValveType.NORMALLY_CLOSED
                         ),
                         "power_entity": data.get(CONF_POWER),
+                        "pump_group": data.get(CONF_PUMP_GROUP),
                         "spread_entity": own(Platform.SENSOR, f"{sid}_spread"),
                         "open_entity": own(Platform.BINARY_SENSOR, f"{sid}_open"),
                     }
@@ -151,6 +166,13 @@ def async_describe_plants(hass: HomeAssistant) -> list[dict[str, Any]]:
                         "circuit": data.get(CONF_CIRCUIT),
                         "floor": floor_id,
                     }
+                )
+        # A circuit without a chosen pump group hangs on the only one there is.
+        group_ids = {group["id"] for group in plant["pump_groups"]}
+        for circuit in plant["circuits"]:
+            if circuit["pump_group"] not in group_ids:
+                circuit["pump_group"] = (
+                    next(iter(group_ids)) if len(group_ids) == 1 else None
                 )
         for floor_id in floor_ids:
             if (floor := floors.async_get_floor(floor_id)) is not None:

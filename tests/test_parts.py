@@ -283,3 +283,79 @@ async def test_floor_comes_from_thermostat_area(
     assert [floor["name"] for floor in plant["floors"]] == ["DG"]
     rooms = {room["name"]: room["floor"] for room in plant["rooms"]}
     assert rooms == {"Bad": attic.floor_id, "Flur": None}
+
+
+async def test_pump_group_feeds_circuits(
+    hass: HomeAssistant, hass_ws_client: WebSocketGenerator
+) -> None:
+    """A pump group is described and the only one feeds every circuit."""
+    entry = _entry(
+        {
+            "type": "pump_group",
+            "data": {
+                CONF_NAME: "Pumpengruppe",
+                "flow_entity": "sensor.mixed_flow",
+                "control_entity": "switch.heating_circuit",
+            },
+        },
+        CIRCUIT,
+    )
+    await _setup(hass, entry)
+    client = await hass_ws_client(hass)
+    await client.send_json_auto_id({"type": "heizzentrale/plants"})
+    (plant,) = (await client.receive_json())["result"]["plants"]
+    (group,) = plant["pump_groups"]
+    assert group["name"] == "Pumpengruppe"
+    assert group["flow_entity"] == "sensor.mixed_flow"
+    assert group["control_entity"] == "switch.heating_circuit"
+    assert plant["circuits"][0]["pump_group"] == group["id"]
+
+
+async def test_circuit_flow_offers_pump_groups(hass: HomeAssistant) -> None:
+    """The circuit form lists pump groups only when there are some."""
+    entry = _entry({"type": "pump_group", "data": {CONF_NAME: "Pumpengruppe"}})
+    await _setup(hass, entry)
+    result = await hass.config_entries.subentries.async_init(
+        (entry.entry_id, "circuit"), context={"source": SOURCE_USER}
+    )
+    assert result["type"] is FlowResultType.FORM
+    assert "pump_group" in result["data_schema"].schema
+
+    result = await hass.config_entries.subentries.async_init(
+        (entry.entry_id, "pump_group"), context={"source": SOURCE_USER}
+    )
+    result = await hass.config_entries.subentries.async_configure(
+        result["flow_id"], {CONF_NAME: " Zweite ", "flow_entity": "sensor.flow2"}
+    )
+    assert result["type"] is FlowResultType.CREATE_ENTRY
+    assert result["title"] == "Zweite"
+
+
+async def test_room_name_and_circuit_are_filled_in(hass: HomeAssistant) -> None:
+    """A room only needs its thermostat: name and the only circuit follow."""
+    from homeassistant.helpers import area_registry as ar
+
+    area = ar.async_get(hass).async_create("Wohnzimmer")
+    registry = er.async_get(hass)
+    item = registry.async_get_or_create("climate", "test", "wz")
+    registry.async_update_entity(item.entity_id, area_id=area.id)
+    entry = _entry(CIRCUIT)
+    await _setup(hass, entry)
+    circuit_id = next(iter(entry.subentries))
+    result = await hass.config_entries.subentries.async_init(
+        (entry.entry_id, "room"), context={"source": SOURCE_USER}
+    )
+    result = await hass.config_entries.subentries.async_configure(
+        result["flow_id"], {"climate_entity": item.entity_id}
+    )
+    assert result["type"] is FlowResultType.CREATE_ENTRY
+    assert result["title"] == "Wohnzimmer"
+    assert result["data"]["circuit"] == circuit_id
+
+    result = await hass.config_entries.subentries.async_init(
+        (entry.entry_id, "room"), context={"source": SOURCE_USER}
+    )
+    result = await hass.config_entries.subentries.async_configure(
+        result["flow_id"], {"climate_entity": "climate.gaeste_bad"}
+    )
+    assert result["title"] == "Gaeste Bad"

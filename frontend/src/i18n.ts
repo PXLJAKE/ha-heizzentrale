@@ -101,6 +101,41 @@ const en = {
   edit_parts: "Add or change parts",
   edit_hint:
     "Opens the Heizzentrale page of Home Assistant. Heat sources, buffers, circuits and rooms are added and changed there.",
+  pump_group: "Pump group",
+  pump_stopped: "stopped",
+  set_pumps: "Pump groups",
+  n_circuits: "{count} circuits",
+  pump_switchable: "can be switched",
+  warn_no_control:
+    "No entity to switch it chosen. Heizzentrale will not be able to turn it off when all circuits are closed.",
+  x_pump:
+    "{name} pushes the heating water into the circuits behind it. A mixer, if there is one, sets how hot that water is.",
+  x_pump_flow: "Flow temperature behind the mixer: {temp}.",
+  x_pump_needed: "It is needed right now because these circuits are open: {circuits}.",
+  x_pump_idle:
+    "All circuits behind it are closed, so it has nothing to do. Once switching is enabled, Heizzentrale turns it off in this situation.",
+  x_pump_running: "The pump reports that it is running.",
+  x_pump_stopped: "The pump reports that it is stopped.",
+  x_pump_control:
+    "An entity to switch it is chosen. Heizzentrale only observes for now and does not use it yet.",
+  x_pump_no_control: "No entity to switch it is chosen yet.",
+  setup_title: "Setup",
+  setup_intro:
+    "Add the parts of your heating in this order. Only the name is required each time; sensors can be filled in later.",
+  setup_done: "The basics are set up. You can add or change parts at any time.",
+  setup_optional: "only if you have one",
+  setup_source: "Heat source",
+  setup_source_hint: "Your boiler or heat pump.",
+  setup_buffer: "Buffer tank",
+  setup_buffer_hint: "The tank that stores hot water, with its temperature sensors.",
+  setup_pump: "Pump group",
+  setup_pump_hint: "The pump, with or without mixer, that feeds the circuits.",
+  setup_circuits: "Circuits",
+  setup_circuits_hint:
+    "Every branch that can be opened and closed on its own, for example one per floor.",
+  setup_rooms: "Rooms",
+  setup_rooms_hint:
+    "One per thermostat. Name and floor come from Home Assistant on their own.",
   editor_plant: "Plant",
   editor_title: "Title (optional)",
   editor_first: "First plant",
@@ -208,6 +243,42 @@ const de: typeof en = {
   edit_parts: "Teile hinzufügen oder ändern",
   edit_hint:
     "Öffnet die Heizzentrale-Seite von Home Assistant. Dort werden Wärmeerzeuger, Puffer, Stränge und Räume angelegt und geändert.",
+  pump_group: "Pumpengruppe",
+  pump_stopped: "steht",
+  set_pumps: "Pumpengruppen",
+  n_circuits: "{count} Stränge",
+  pump_switchable: "schaltbar",
+  warn_no_control:
+    "Keine Entität zum Schalten gewählt. Heizzentrale kann sie dann nicht ausschalten, wenn alle Stränge zu sind.",
+  x_pump:
+    "{name} drückt das Heizwasser in die Stränge dahinter. Ein Mischer, falls vorhanden, bestimmt, wie heiß dieses Wasser ist.",
+  x_pump_flow: "Vorlauftemperatur hinter dem Mischer: {temp}.",
+  x_pump_needed: "Sie wird gerade gebraucht, weil diese Stränge offen sind: {circuits}.",
+  x_pump_idle:
+    "Alle Stränge dahinter sind zu, sie hat also nichts zu tun. Sobald das Schalten freigegeben ist, schaltet Heizzentrale sie in dieser Lage aus.",
+  x_pump_running: "Die Pumpe meldet, dass sie läuft.",
+  x_pump_stopped: "Die Pumpe meldet, dass sie steht.",
+  x_pump_control:
+    "Eine Entität zum Schalten ist gewählt. Heizzentrale beobachtet vorerst nur und benutzt sie noch nicht.",
+  x_pump_no_control: "Es ist noch keine Entität zum Schalten gewählt.",
+  setup_title: "Einrichtung",
+  setup_intro:
+    "Lege die Teile deiner Heizung in dieser Reihenfolge an. Pflicht ist jeweils nur der Name, Fühler kannst du nachtragen.",
+  setup_done:
+    "Die Grundeinrichtung steht. Du kannst jederzeit Teile hinzufügen oder ändern.",
+  setup_optional: "nur falls vorhanden",
+  setup_source: "Wärmeerzeuger",
+  setup_source_hint: "Dein Kessel oder deine Wärmepumpe.",
+  setup_buffer: "Pufferspeicher",
+  setup_buffer_hint: "Der Speicher für heißes Wasser mit seinen Temperaturfühlern.",
+  setup_pump: "Pumpengruppe",
+  setup_pump_hint: "Die Pumpe, mit oder ohne Mischer, die die Stränge versorgt.",
+  setup_circuits: "Stränge",
+  setup_circuits_hint:
+    "Jeder Teil, der sich einzeln öffnen und schließen lässt, zum Beispiel einer pro Stockwerk.",
+  setup_rooms: "Räume",
+  setup_rooms_hint:
+    "Einer pro Thermostat. Name und Stockwerk kommen von selbst aus Home Assistant.",
   editor_plant: "Anlage",
   editor_title: "Titel (optional)",
   editor_first: "Erste Anlage",

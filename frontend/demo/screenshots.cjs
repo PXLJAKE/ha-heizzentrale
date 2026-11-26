@@ -8,10 +8,12 @@ const { chromium } = require("playwright");
   const base = "http://127.0.0.1:8765/frontend/demo/index.html";
   const jobs = [
     ["hausansicht-tablet-hell", { width: 1024, height: 900 }, ""],
-    ["hausansicht-tablet-dunkel", { width: 1024, height: 900 }, "?theme=dark&select=circuit:og"],
+    ["hausansicht-tablet-dunkel", { width: 1024, height: 900 }, "?theme=dark&select=pump:pg"],
     ["hausansicht-handy", { width: 390, height: 844 }, ""],
     ["raum-angeklickt", { width: 1024, height: 900 }, "?select=room:r4"],
     ["raum-angeklickt-handy", { width: 390, height: 844 }, "?select=room:r9"],
+    ["einrichtung-leer", { width: 390, height: 844 }, "?empty=1"],
+    ["einrichtung-unterwegs", { width: 1024, height: 900 }, "?view=settings&partial=1"],
     ["einstellungen", { width: 1024, height: 900 }, "?view=settings"],
     ["einstellungen-handy-dunkel", { width: 390, height: 844 }, "?view=settings&theme=dark"],
   ];

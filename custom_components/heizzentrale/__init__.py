@@ -14,7 +14,15 @@ from homeassistant.helpers.storage import Store
 from homeassistant.helpers.typing import ConfigType
 from homeassistant.loader import async_get_integration
 
-from .const import CARD_FILENAME, DEFAULT_MODE, DOMAIN, FRONTEND_URL, OperatingMode
+from .const import (
+    CARD_FILENAME,
+    DEFAULT_MODE,
+    DOMAIN,
+    FRONTEND_URL,
+    PANEL_ELEMENT,
+    PANEL_URL_PATH,
+    OperatingMode,
+)
 from .manager import PlantManager, storage_key
 from .websocket_api import async_register_websocket_api
 
@@ -35,7 +43,7 @@ type HeizzentraleConfigEntry = ConfigEntry[HeizzentraleData]
 
 
 async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
-    """Register the websocket API and serve the dashboard card."""
+    """Register the websocket API, the dashboard card and the sidebar page."""
     async_register_websocket_api(hass)
 
     frontend_dir = Path(__file__).parent / "frontend"
@@ -44,13 +52,24 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
     )
     if "frontend" in hass.config.components:
         # Imported lazily: the card is optional and tests run without frontend.
+        from homeassistant.components import panel_custom
         from homeassistant.components.frontend import (
             add_extra_js_url,
         )
 
         integration = await async_get_integration(hass, DOMAIN)
-        add_extra_js_url(
-            hass, f"{FRONTEND_URL}/{CARD_FILENAME}?v={integration.version}"
+        url = f"{FRONTEND_URL}/{CARD_FILENAME}?v={integration.version}"
+        add_extra_js_url(hass, url)
+        # Sidebar entry: the same house view as a full page.
+        await panel_custom.async_register_panel(
+            hass,
+            frontend_url_path=PANEL_URL_PATH,
+            webcomponent_name=PANEL_ELEMENT,
+            sidebar_title="Heizzentrale",
+            sidebar_icon="mdi:radiator",
+            module_url=url,
+            embed_iframe=False,
+            require_admin=False,
         )
     return True
 

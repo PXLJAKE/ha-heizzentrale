@@ -35,6 +35,7 @@ const states = {
   "sensor.outside": T(4.6),
   "sensor.boiler": T(68.4), "sensor.boiler_state": B("heating"),
   "sensor.buf_top": T(62.1), "sensor.buf_mid": T(51.3), "sensor.buf_bottom": T(38.2), "sensor.buf_mean": T(50.5),
+  "sensor.pg_vl": T(56.2), "sensor.pg_rl": T(45.3), "binary_sensor.pg_pump": B("on"),
   "sensor.eg_vl": T(55.8), "sensor.eg_rl": T(46.9), "sensor.eg_spread": B("8.9"), "binary_sensor.eg_open": B("on"),
   "sensor.og_vl": T(55.6), "sensor.og_rl": T(44.1), "sensor.og_spread": B("11.5"), "binary_sensor.og_open": B("on"),
   "sensor.dg_vl": T(31.2), "sensor.dg_rl": T(29.8), "sensor.dg_spread": B("1.4"), "binary_sensor.dg_open": B("off"),
@@ -53,11 +54,12 @@ const states = {
   "climate.keller_schlafen": room(17.6, 17, "idle", "eco"),
 };
 const c = (id, name, system) => ({ id, name, system_type: system, flow_entity: `sensor.${id}_vl`, return_entity: `sensor.${id}_rl`,
-  valve_entity: `switch.${id}`, valve_type: "nc", spread_entity: `sensor.${id}_spread`, open_entity: `binary_sensor.${id}_open` });
+  valve_entity: `switch.${id}`, valve_type: "nc", pump_group: "pg", spread_entity: `sensor.${id}_spread`, open_entity: `binary_sensor.${id}_open` });
 const r = (id, name, climate, circuit, floor, win) => ({ id, name, climate_entity: climate, circuit, floor, window_entity: win });
 const plant = { entry_id: "demo", name: "Heizung", mode_entity: "select.mode", outdoor_entity: "sensor.outside",
   heat_sources: [{ id: "k", name: "Pellematic", kind: "pellet", temperature_entity: "sensor.boiler", status_entity: "sensor.boiler_state" }],
   buffers: [{ id: "p", name: "Puffer", sensor_entities: ["sensor.buf_top", "sensor.buf_mid", "sensor.buf_bottom"], volume: 550, mean_entity: "sensor.buf_mean" }],
+  pump_groups: [{ id: "pg", name: "Pumpengruppe", flow_entity: "sensor.pg_vl", return_entity: "sensor.pg_rl", status_entity: "binary_sensor.pg_pump", control_entity: "switch.hk1" }],
   circuits: [c("eg", "EG", "one_pipe"), c("og", "OG", "one_pipe"), c("dg", "DG", "two_pipe"), c("saal", "Saal", "two_pipe")],
   floors: [{ id: "dg", name: "Dachgeschoss", level: 2 }, { id: "og", name: "1. Obergeschoss", level: 1 }, { id: "eg", name: "Erdgeschoss", level: 0 }, { id: "ke", name: "Keller", level: -1 }],
   rooms: [
@@ -66,7 +68,18 @@ const plant = { entry_id: "demo", name: "Heizung", mode_entity: "select.mode", o
     r("r8", "Wohn-/Esszimmer", "climate.eg_wohnen", "eg", "eg"), r("r9", "Bad", "climate.eg_bad", "eg", "eg", "binary_sensor.eg_bad_fenster"), r("r10", "Küche", "climate.eg_kueche", "eg", "eg"), r("r11", "Büro", "climate.eg_buero", "eg", "eg"),
     r("r12", "Schlafzimmer Eltern", "climate.keller_schlafen", "eg", "ke"),
   ] };
-const card = document.getElementById("card");
+// ?panel=1 shows the sidebar page instead of the bare card.
+let card = document.getElementById("card");
+if (q.get("panel")) {
+  document.body.style.padding = "0";
+  const panel = document.createElement("heizzentrale-panel");
+  document.querySelector("main").replaceWith(panel);
+  await panel.updateComplete;
+  const inner = panel.shadowRoot.querySelector("heizzentrale-house-card");
+  card = { setConfig() {}, set hass(value) { panel.hass = value; }, _select: (x) => inner._select(x) };
+}
+if (q.get("empty")) { for (const k of ["heat_sources", "buffers", "pump_groups", "circuits", "rooms", "floors"]) plant[k] = []; }
+if (q.get("partial")) { plant.rooms = []; plant.floors = []; plant.pump_groups = []; }
 card.setConfig({});
 const PRESETS = { comfort: "Komfort", eco: "Eco", sleep: "Schlafen", away: "Abwesend" };
 const hass = () => ({ states: { ...states }, language: q.get("lang") || "de", callWS: async () => ({ plants: [plant] }),
