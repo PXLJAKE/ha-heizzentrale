@@ -28,9 +28,18 @@ export interface AbsenceRule {
   action: string;
 }
 
+export interface Stove {
+  id: string;
+  name: string;
+  sensor: string | null;
+  on_above: number;
+  room: string | null;
+  actions: Record<string, string>;
+}
+
 export interface RoomPlan {
   action: string;
-  source: "schedule" | "absence";
+  source: "schedule" | "absence" | "stove";
   name: string;
   applied: boolean;
 }
@@ -39,7 +48,9 @@ export interface Control {
   enabled: boolean;
   schedules: Schedule[];
   rules: AbsenceRule[];
+  stoves?: Stove[];
   active_rules: string[];
+  burning?: string[];
   rooms: Record<string, RoomPlan>;
 }
 
@@ -124,6 +135,7 @@ export class HeizzentraleControl extends LitElement {
     t: { attribute: false },
     _schedule: { state: true },
     _rule: { state: true },
+    _stove: { state: true },
     _error: { state: true },
     _busy: { state: true },
   };
@@ -134,6 +146,7 @@ export class HeizzentraleControl extends LitElement {
   t: Translate = (key) => key;
   private _schedule?: Schedule;
   private _rule?: AbsenceRule;
+  private _stove?: Stove;
   private _error?: string;
   private _busy = false;
 
@@ -188,7 +201,11 @@ export class HeizzentraleControl extends LitElement {
     return actionLabel(action, this.t, this.hass, climate);
   }
 
-  private _actionPicker(action: string, change: (action: string) => void) {
+  private _actionPicker(
+    action: string,
+    change: (action: string) => void,
+    none?: string,
+  ) {
     const t = this.t;
     const isTemperature = action.startsWith("temperature:");
     const presets = this._presets().map((preset) => `preset:${preset}`);
@@ -201,6 +218,9 @@ export class HeizzentraleControl extends LitElement {
           change(value === "temperature" ? "temperature:20" : value);
         }}
       >
+        ${none !== undefined
+          ? html`<option value="" ?selected=${action === ""}>${none}</option>`
+          : nothing}
         ${presets.map(
           (preset) =>
             html`<option value=${preset} ?selected=${action === preset}>
@@ -582,6 +602,165 @@ export class HeizzentraleControl extends LitElement {
     `;
   }
 
+  // -- stoves ---------------------------------------------------------------
+
+  private _stoveTemp(stove: Stove): string {
+    const state = stove.sensor ? this.hass?.states[stove.sensor] : undefined;
+    const value = Number(state?.state);
+    if (!state || !Number.isFinite(value)) return "";
+    return `${Math.round(value)} ${state.attributes.unit_of_measurement ?? "°C"}`;
+  }
+
+  private _renderStove(stove: Stove) {
+    const t = this.t;
+    const burning = this.control?.burning?.includes(stove.id);
+    const rooms = Object.entries(stove.actions)
+      .map(([id, action]) => {
+        const room = this.plant?.rooms.find((item) => item.id === id);
+        return room ? `${room.name} ${this._label(action)}` : "";
+      })
+      .filter(Boolean);
+    return html`
+      <li>
+        <div class="row-main">
+          <span class="row-name"
+            >${stove.name || t("unnamed")}${burning
+              ? html`<span class="badge hot">${t("stove_burning")}</span>`
+              : nothing}</span
+          >
+          <button class="link" @click=${() => (this._stove = structuredClone(stove))}>
+            ${t("edit")}
+          </button>
+        </div>
+        <div class="row-detail">
+          ${t("stove_summary", { degrees: String(stove.on_above) })}
+          ${this._stoveTemp(stove) ? `${t("stove_now")} ${this._stoveTemp(stove)}.` : ""}
+        </div>
+        ${rooms.length
+          ? html`<div class="row-detail">${t("stove_while")} ${rooms.join(", ")}</div>`
+          : html`<div class="row-warn">${t("stove_no_rooms")}</div>`}
+        ${stove.sensor ? nothing : html`<div class="row-warn">${t("stove_no_sensor")}</div>`}
+      </li>
+    `;
+  }
+
+  private _renderStoveEditor(draft: Stove) {
+    const t = this.t;
+    const update = (change: Partial<Stove>) => (this._stove = { ...draft, ...change });
+    const stoves = this.control?.stoves ?? [];
+    const existing = stoves.some((item) => item.id === draft.id);
+    const sensors = Object.entries(this.hass?.states ?? {})
+      .filter(
+        ([entityId, state]) =>
+          entityId.startsWith("sensor.") && state.attributes.device_class === "temperature",
+      )
+      .map(([entityId]) => entityId)
+      .sort((a, b) => this._entityName(a).localeCompare(this._entityName(b)));
+    if (draft.sensor && !sensors.includes(draft.sensor)) sensors.unshift(draft.sensor);
+    const save = async () => {
+      const clean = { ...draft, name: draft.name.trim() };
+      const list = existing
+        ? stoves.map((item) => (item.id === draft.id ? clean : item))
+        : [...stoves, clean];
+      if (await this._save({ stoves: list })) this._stove = undefined;
+    };
+    return html`
+      <div class="editor">
+        <label class="field">
+          <span class="label">${t("name")}</span>
+          <input
+            type="text"
+            maxlength="60"
+            .value=${draft.name}
+            placeholder=${t("stove_placeholder")}
+            @input=${(event: Event) => update({ name: (event.target as HTMLInputElement).value })}
+          />
+        </label>
+        <div class="label">${t("stove_sensor")}</div>
+        <p class="hint first">${t("stove_sensor_hint")}</p>
+        <select
+          aria-label=${t("stove_sensor")}
+          @change=${(event: Event) =>
+            update({ sensor: (event.target as HTMLSelectElement).value || null })}
+        >
+          <option value="" ?selected=${!draft.sensor}>${t("choose")}</option>
+          ${sensors.map(
+            (entity) =>
+              html`<option value=${entity} ?selected=${draft.sensor === entity}>
+                ${this._entityName(entity)}
+              </option>`,
+          )}
+        </select>
+        <label class="field inline">
+          <span class="label">${t("stove_threshold")}</span>
+          <input
+            class="short"
+            type="number"
+            min="25"
+            max="500"
+            step="1"
+            .value=${String(draft.on_above)}
+            @change=${(event: Event) => {
+              const value = Number((event.target as HTMLInputElement).value);
+              update({ on_above: Number.isFinite(value) ? Math.min(500, Math.max(25, value)) : 40 });
+            }}
+          />
+          <span class="row-detail"
+            >°C ${this._stoveTemp(draft) ? `· ${t("stove_now")} ${this._stoveTemp(draft)}` : ""}</span
+          >
+        </label>
+        <label class="field">
+          <span class="label">${t("stove_room")}</span>
+          <select
+            @change=${(event: Event) =>
+              update({ room: (event.target as HTMLSelectElement).value || null })}
+          >
+            <option value="" ?selected=${!draft.room}>${t("stove_room_none")}</option>
+            ${this.plant?.rooms.map(
+              (room) =>
+                html`<option value=${room.id} ?selected=${draft.room === room.id}>
+                  ${this._roomLabel(room)}
+                </option>`,
+            )}
+          </select>
+        </label>
+        <div class="label">${t("stove_actions")}</div>
+        <p class="hint first">${t("stove_actions_hint")}</p>
+        ${this.plant?.rooms.map(
+          (room) => html`
+            <div class="room-line">
+              <span>${this._roomLabel(room)}</span>
+              <span class="point-line">
+                ${this._actionPicker(
+                  draft.actions[room.id] ?? "",
+                  (action) => {
+                    const actions = { ...draft.actions };
+                    if (action) actions[room.id] = action;
+                    else delete actions[room.id];
+                    update({ actions });
+                  },
+                  t("stove_leave"),
+                )}
+              </span>
+            </div>
+          `,
+        )}
+        ${this._renderEditorButtons(save, () => (this._stove = undefined), existing
+          ? async () => {
+              const list = stoves.filter((item) => item.id !== draft.id);
+              if (await this._save({ stoves: list })) this._stove = undefined;
+            }
+          : undefined)}
+      </div>
+    `;
+  }
+
+  /** Room name with its floor, because names like "Bad" repeat. */
+  private _roomLabel(room: Named & { floor?: string | null }): string {
+    const floor = this.plant?.floors.find((item) => item.id === room.floor);
+    return floor ? `${room.name} (${floor.name})` : room.name;
+  }
+
   // -- render ---------------------------------------------------------------
 
   protected render() {
@@ -589,6 +768,7 @@ export class HeizzentraleControl extends LitElement {
     const control = this.control;
     if (!control || !this.plant) return nothing;
     const away = this._presets().includes("away") ? "preset:away" : "off";
+    const stoves = control.stoves ?? [];
     return html`
       <section class="set">
         <h3>${t("set_schedules")}</h3>
@@ -647,6 +827,37 @@ export class HeizzentraleControl extends LitElement {
             </button>`}
       </section>
       <section class="set">
+        <h3>${t("set_stoves")}</h3>
+        <p class="hint first">${t("stoves_intro")}</p>
+        ${stoves.length
+          ? html`<ul>
+              ${stoves.map((stove) =>
+                this._stove?.id === stove.id
+                  ? html`<li>${this._renderStoveEditor(this._stove)}</li>`
+                  : this._renderStove(stove),
+              )}
+            </ul>`
+          : nothing}
+        ${this._stove && !stoves.some((item) => item.id === this._stove!.id)
+          ? html`<div class="new">${this._renderStoveEditor(this._stove)}</div>`
+          : html`<button
+              class="wide"
+              @click=${() => {
+                this._error = undefined;
+                this._stove = {
+                  id: newId(),
+                  name: "",
+                  sensor: null,
+                  on_above: 40,
+                  room: null,
+                  actions: {},
+                };
+              }}
+            >
+              + ${t("add_stove")}
+            </button>`}
+      </section>
+      <section class="set">
         <h3>${t("set_apply")}</h3>
         <div class="choices">
           ${[false, true].map(
@@ -662,7 +873,7 @@ export class HeizzentraleControl extends LitElement {
           )}
         </div>
         <p class="hint">${t(control.enabled ? "apply_on_hint" : "apply_off_hint")}</p>
-        ${this._error && !this._schedule && !this._rule
+        ${this._error && !this._schedule && !this._rule && !this._stove
           ? html`<div class="row-warn">${this._error}</div>`
           : nothing}
       </section>
@@ -733,6 +944,22 @@ export class HeizzentraleControl extends LitElement {
       padding: 2px 8px;
       border-radius: 999px;
       background: color-mix(in srgb, var(--hz-cold) 22%, transparent);
+    }
+    .badge.hot {
+      background: color-mix(in srgb, var(--hz-hot) 24%, transparent);
+    }
+    .room-line {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      flex-wrap: wrap;
+      font-size: 0.9rem;
+      padding: 4px 0;
+      border-top: 1px solid var(--hz-edge);
+    }
+    .room-line .point-line {
+      flex: 0 1 260px;
     }
     .hint {
       margin: 8px 0 0;

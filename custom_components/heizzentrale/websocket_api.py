@@ -51,7 +51,7 @@ from .const import (
     SUBENTRY_ROOM,
     ValveType,
 )
-from .control import RULES_SCHEMA, SCHEDULES_SCHEMA
+from .control import RULES_SCHEMA, SCHEDULES_SCHEMA, STOVES_SCHEMA
 from .manager import PlantManager
 
 
@@ -393,6 +393,7 @@ def ws_control_get(
         vol.Optional("enabled"): bool,
         vol.Optional("schedules"): SCHEDULES_SCHEMA,
         vol.Optional("rules"): RULES_SCHEMA,
+        vol.Optional("stoves"): STOVES_SCHEMA,
     }
 )
 @websocket_api.async_response
@@ -405,6 +406,6 @@ async def ws_control_save(
     if (manager := _manager(hass, connection, msg)) is None:
         return
     await manager.control.async_save(
-        msg.get("enabled"), msg.get("schedules"), msg.get("rules")
+        msg.get("enabled"), msg.get("schedules"), msg.get("rules"), msg.get("stoves")
     )
     connection.send_result(msg["id"], manager.control.payload())

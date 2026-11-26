@@ -18,6 +18,7 @@ const { chromium } = require("playwright");
     ["einstellungen-handy-dunkel", { width: 390, height: 844 }, "?view=settings&theme=dark"],
     ["zeitplaene-abwesenheit", { width: 1024, height: 900 }, "?view=settings", "heizzentrale-control"],
     ["zeitplan-bearbeiten-handy", { width: 390, height: 844 }, "?view=settings&edit=schedule", "heizzentrale-control"],
+    ["ofen-bearbeiten", { width: 1024, height: 900 }, "?view=settings&edit=stove", "heizzentrale-control"],
     ["abwesenheit-bearbeiten", { width: 1024, height: 900 }, "?view=settings&edit=rule&theme=dark", "heizzentrale-control"],
   ];
   const browser = await chromium.launch();

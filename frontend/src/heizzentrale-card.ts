@@ -677,6 +677,15 @@ class HeizzentraleHouseCard extends LitElement {
             ? html`<span class="preset">${this._presetLabel(climate, preset)}</span>`
             : nothing}
         </div>
+        ${(this._control?.stoves ?? [])
+          .filter((stove) => stove.room === room.id)
+          .map((stove) => {
+            const burning = this._control?.burning?.includes(stove.id);
+            return html`<div class="stove ${burning ? "burning" : ""}">
+              ${ICON_FLAME}<span class="stove-name">${stove.name || t("stove")}</span>
+              <span>${this._format(this._number(stove.sensor), "°", 0)}</span>
+            </div>`;
+          })}
       </div>
     `;
   }
@@ -1151,7 +1160,11 @@ class HeizzentraleHouseCard extends LitElement {
   /** What the schedule or an absence rule wants for this room right now. */
   private _renderPlan(room: Room) {
     const control = this._control;
-    if (!control || (!control.schedules.length && !control.rules.length)) return nothing;
+    if (
+      !control ||
+      (!control.schedules.length && !control.rules.length && !control.stoves?.length)
+    )
+      return nothing;
     const t = this._t;
     const plan = control.rooms[room.id];
     const action = plan
@@ -1162,7 +1175,7 @@ class HeizzentraleHouseCard extends LitElement {
         <div class="why-title">${t("plan")}</div>
         ${plan
           ? html`<p>
-                ${t(plan.source === "absence" ? "plan_absence" : "plan_schedule", {
+                ${t(`plan_${plan.source}` as TextKey, {
                   name: plan.name,
                   action,
                 })}
@@ -1913,6 +1926,36 @@ class HeizzentraleHouseCard extends LitElement {
     button:disabled {
       opacity: 0.4;
       cursor: default;
+    }
+    .stove {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      margin-top: 6px;
+      padding-top: 6px;
+      border-top: 1px solid var(--hz-edge);
+      font-size: 0.75rem;
+      color: var(--hz-muted);
+    }
+    .stove svg {
+      width: 13px;
+      height: 13px;
+      flex: none;
+      opacity: 0.5;
+    }
+    .stove.burning {
+      color: var(--hz-hot);
+      font-weight: 600;
+    }
+    .stove.burning svg {
+      opacity: 1;
+    }
+    .stove-name {
+      flex: 1;
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
     }
     .choices {
       display: flex;

@@ -12,6 +12,7 @@ from custom_components.heizzentrale.scheduling import (
     is_present,
     parse_time,
     rule_active,
+    stove_burning,
 )
 
 WORKDAYS = [0, 1, 2, 3, 4]
@@ -80,3 +81,24 @@ def test_room_schedule_wins_over_floor_and_absence_over_both() -> None:
     got = desired_for_room("bad", "og", [floor, room], [rule], 0, 600)
     assert got is not None and (got.action, got.source) == ("off", SOURCE_ABSENCE)
     assert desired_for_room("keller", "ug", [floor, room], [rule], 0, 600) is None
+
+
+def test_stove_has_hysteresis() -> None:
+    assert not stove_burning(39.9, 40, False)
+    assert stove_burning(40, 40, False)
+    assert stove_burning(36, 40, True)
+    assert not stove_burning(35, 40, True)
+    assert not stove_burning(None, 40, True)
+
+
+def test_stove_beats_schedule_but_not_absence() -> None:
+    schedule = {"name": "EG", "floors": ["eg"], "rooms": [], "points": POINTS}
+    stove = {"name": "Ofen", "actions": {"wohnen": "off", "bad": "preset:eco"}}
+    rule = {"name": "Weg", "rooms": ["wohnen"], "floors": [], "action": "preset:away"}
+
+    got = desired_for_room("wohnen", "eg", [schedule], [], 0, 600, [stove])
+    assert got is not None and (got.action, got.source) == ("off", "stove")
+    got = desired_for_room("kueche", "eg", [schedule], [], 0, 600, [stove])
+    assert got is not None and got.source == SOURCE_SCHEDULE
+    got = desired_for_room("wohnen", "eg", [schedule], [rule], 0, 600, [stove])
+    assert got is not None and got.source == SOURCE_ABSENCE
