@@ -19,6 +19,7 @@ const { chromium } = require("playwright");
     ["zeitplaene-abwesenheit", { width: 1024, height: 900 }, "?view=settings", "heizzentrale-control"],
     ["zeitplan-bearbeiten-handy", { width: 390, height: 844 }, "?view=settings&edit=schedule", "heizzentrale-control"],
     ["wuerde-schalten", { width: 1024, height: 900 }, "?would=1&select=circuit:og"],
+    ["schaltet", { width: 1024, height: 900 }, "?active=1&select=circuit:dg"],
     ["heizraum-ohne-puffer", { width: 1024, height: 900 }, "?nobuffer=1", ".plant-room"],
     ["heizraum-kette", { width: 1024, height: 900 }, "", ".plant-room"],
     ["heizraum-kette-handy", { width: 390, height: 844 }, "?theme=dark", ".plant-room"],

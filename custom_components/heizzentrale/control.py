@@ -1,9 +1,14 @@
-"""Applies schedules and absence rules to the thermostats of the rooms.
+"""Applies schedules and rules to the thermostats and switches strands.
 
 The engine runs once a minute and whenever a person or device of an absence
 rule changes. It touches a thermostat only when the wanted action changes, so
 a change made by hand stays until the next switch point. While it is not
 enabled it only reports what it would do.
+
+In the operating mode ``active`` it also switches strands and pump groups.
+Opening a strand is always enforced. Closing and switching a pump group off
+happen once per change, and a pump group is only switched on again if the
+engine itself switched it off. Leaving the mode opens everything again.
 """
 
 from __future__ import annotations
@@ -24,14 +29,12 @@ from homeassistant.helpers.event import (
 )
 from homeassistant.util import dt as dt_util
 
-from .const import (
-    CONF_CONTROL_OFF,
-    CONF_CONTROL_ON,
-)
+from .const import CONF_CONTROL_OFF, CONF_CONTROL_ON, OperatingMode
 from .demand import RoomReading, circuit_advice, pump_advice
 from .model import circuit_open, parse_float
 from .scheduling import (
     SOURCE_SCHEDULE,
+    SOURCE_WINDOW,
     Desired,
     desired_for_room,
     is_present,
@@ -131,6 +134,16 @@ STOVE_SCHEMA = vol.Schema(
 SCHEDULES_SCHEMA = vol.All([SCHEDULE_SCHEMA], vol.Length(max=MAX_SCHEDULES))
 RULES_SCHEMA = vol.All([RULE_SCHEMA], vol.Length(max=MAX_RULES))
 STOVES_SCHEMA = vol.All([STOVE_SCHEMA], vol.Length(max=MAX_STOVES))
+# An open window switches the thermostat of its room off after a short wait.
+WINDOW_SCHEMA = vol.Schema(
+    {
+        vol.Optional("enabled", default=True): bool,
+        vol.Optional("delay_min", default=2): vol.All(
+            vol.Coerce(float), vol.Range(min=0, max=60)
+        ),
+    }
+)
+DEFAULT_WINDOW = {"enabled": True, "delay_min": 2.0}
 
 
 class ControlEngine:
@@ -144,6 +157,11 @@ class ControlEngine:
         self.schedules: list[dict[str, Any]] = []
         self.rules: list[dict[str, Any]] = []
         self.stoves: list[dict[str, Any]] = []
+        self.window: dict[str, Any] = dict(DEFAULT_WINDOW)
+        # Thermostat state before an open window switched it off, per room.
+        self._window_saved: dict[str, dict[str, Any]] = {}
+        # Strands the engine closed and pump groups it switched off.
+        self._switched: dict[str, str] = {}
         # Stoves that currently burn; kept for the switch-off hysteresis.
         self._burning: list[str] = []
         # Last action the engine set per room; survives restarts.
@@ -170,6 +188,9 @@ class ControlEngine:
         self.schedules = list(data.get("schedules", []))
         self.rules = list(data.get("rules", []))
         self.stoves = list(data.get("stoves", []))
+        self.window = {**DEFAULT_WINDOW, **data.get("window", {})}
+        self._window_saved = dict(data.get("window_saved", {}))
+        self._switched = dict(data.get("switched", {}))
         self._burning = list(data.get("burning", []))
         self._applied = dict(data.get("applied", {}))
         self._restore = dict(data.get("restore", {}))
@@ -182,6 +203,9 @@ class ControlEngine:
             "schedules": self.schedules,
             "rules": self.rules,
             "stoves": self.stoves,
+            "window": self.window,
+            "window_saved": self._window_saved,
+            "switched": self._switched,
             "burning": self._burning,
             "applied": self._applied,
             "restore": self._restore,
@@ -254,6 +278,7 @@ class ControlEngine:
         schedules: list[dict[str, Any]] | None = None,
         rules: list[dict[str, Any]] | None = None,
         stoves: list[dict[str, Any]] | None = None,
+        window: dict[str, Any] | None = None,
     ) -> None:
         """Store changed settings and apply them right away."""
         if enabled is not None:
@@ -264,6 +289,8 @@ class ControlEngine:
             self.rules = rules
         if stoves is not None:
             self.stoves = stoves
+        if window is not None:
+            self.window = window
         self._track_entities()
         await self._manager.async_save()
         await self.async_run()
@@ -424,6 +451,16 @@ class ControlEngine:
                 )
                 if not climate:
                     continue
+                airing = self._airing(room, now)
+                changed |= await self._async_window(room_id, climate, airing)
+                if airing:
+                    status[room_id] = {
+                        "action": ACTION_OFF,
+                        "source": SOURCE_WINDOW,
+                        "name": "",
+                        "applied": room_id in self._window_saved,
+                    }
+                    continue
                 changed |= await self._async_apply(room_id, climate, desired)
                 if desired is not None:
                     status[room_id] = {
@@ -433,8 +470,166 @@ class ControlEngine:
                         "applied": self._applied.get(room_id) == desired.action,
                     }
             self._status = status
+            changed |= await self._async_switch(plant)
             if changed:
                 await self._manager.async_save()
+
+    def _airing(self, room: dict[str, Any], now: datetime) -> bool:
+        """Whether a window of the room has been open for long enough."""
+        if not self.window["enabled"]:
+            return False
+        delay = self.window["delay_min"] * 60
+        for entity_id in room.get("window_entities", []):
+            state = self.hass.states.get(entity_id)
+            if state is None or state.state != "on":
+                continue
+            # A room that is already switched off stays off until it closes.
+            if room["id"] in self._window_saved:
+                return True
+            if (now - state.last_changed).total_seconds() >= delay:
+                return True
+        return False
+
+    async def _async_window(self, room_id: str, climate: str, airing: bool) -> bool:
+        """Switch a room off while it is aired and put it back afterwards."""
+        if airing:
+            if not self.enabled or room_id in self._window_saved:
+                return False
+            state = self.hass.states.get(climate)
+            if state is None or state.state in ("unavailable", "unknown"):
+                return False
+            self._window_saved[room_id] = {
+                "hvac_mode": state.state,
+                "preset_mode": state.attributes.get("preset_mode"),
+                "temperature": state.attributes.get("temperature"),
+            }
+            if state.state != "off":
+                await self._async_action(climate, ACTION_OFF)
+            return True
+        if (previous := self._window_saved.pop(room_id, None)) is None:
+            return False
+        if previous.get("hvac_mode") != "off":
+            # Only switch it on again; preset and setpoint were not touched.
+            await self._async_heat(climate, previous.get("hvac_mode"))
+        return True
+
+    # -- strands and pump groups -------------------------------------------
+
+    def _mode(self) -> OperatingMode | None:
+        """The operating mode; None until the stored one has been restored."""
+        data = getattr(self._manager.entry, "runtime_data", None)
+        if data is None or not data.mode_restored:
+            return None
+        return data.mode
+
+    def _switching(self) -> bool:
+        return self._mode() is OperatingMode.ACTIVE
+
+    async def _async_service(self, domain: str, service: str, **data: Any) -> bool:
+        try:
+            await self.hass.services.async_call(domain, service, data, blocking=True)
+        except (HomeAssistantError, vol.Invalid, ValueError) as err:
+            _LOGGER.warning("Could not call %s.%s: %s", domain, service, err)
+            return False
+        return True
+
+    async def _async_valve(self, circuit: dict[str, Any], open_: bool) -> bool:
+        """Open or close the actuator of a strand."""
+        entity_id = circuit["valve_entity"]
+        domain = entity_id.split(".", 1)[0]
+        if domain == "valve":
+            service = "open_valve" if open_ else "close_valve"
+        else:
+            # A normally closed actuator opens with power, a normally open
+            # one closes with it.
+            powered = open_ != (circuit.get("valve_type") == "no")
+            domain, service = "homeassistant", "turn_on" if powered else "turn_off"
+        return await self._async_service(domain, service, entity_id=entity_id)
+
+    async def _async_pump(self, group: dict[str, Any], on: bool) -> bool:
+        """Switch a pump group on or off through its control entity."""
+        entity_id = group["control_entity"]
+        domain = entity_id.split(".", 1)[0]
+        if domain in ("select", "input_select"):
+            option = group.get(CONF_CONTROL_ON if on else CONF_CONTROL_OFF)
+            if not option:
+                return False
+            return await self._async_service(
+                domain, "select_option", entity_id=entity_id, option=option
+            )
+        if domain == "climate":
+            if not on:
+                return await self._async_service(
+                    "climate", "set_hvac_mode", entity_id=entity_id, hvac_mode="off"
+                )
+            await self._async_heat(entity_id)
+            return True
+        return await self._async_service(
+            "homeassistant", "turn_on" if on else "turn_off", entity_id=entity_id
+        )
+
+    async def _async_switch(self, plant: dict[str, Any]) -> bool:
+        """Carry out the advice for strands and pump groups. True if stored.
+
+        Order matters: strands open before a pump starts, and a pump stops
+        before its strands close, so it never runs against closed valves.
+        """
+        before = dict(self._switched)
+        circuits = {c["id"]: c for c in plant["circuits"] if c.get("valve_entity")}
+        groups = {g["id"]: g for g in plant["pump_groups"] if g.get("control_entity")}
+        if self._mode() is None:
+            # Right after a start the mode is not known yet: touch nothing.
+            return False
+        if not self._switching():
+            # Hand everything back the way a plant without Heizzentrale runs.
+            for part_id, action in before.items():
+                if action == "close" and part_id in circuits:
+                    await self._async_valve(circuits[part_id], True)
+                elif (
+                    action == "off"
+                    and part_id in groups
+                    and self._pump_is_on(groups[part_id]) is False
+                ):
+                    await self._async_pump(groups[part_id], True)
+            self._switched = {}
+            return bool(before)
+
+        advice = self._advice
+        for cid, circuit in circuits.items():
+            item = advice["circuits"].get(cid, {})
+            if item.get("action") == "open":
+                await self._async_valve(circuit, True)
+            if item.get("wanted", True):
+                self._switched.pop(cid, None)
+        for gid, group in groups.items():
+            item = advice["pump_groups"].get(gid, {})
+            action = item.get("action")
+            if action == "off":
+                if self._switched.get(gid) != "off" and await self._async_pump(
+                    group, False
+                ):
+                    self._switched[gid] = "off"
+            elif action == "on":
+                # Only undo our own switching off: someone who switched the
+                # heating off by hand wants it to stay off.
+                if self._switched.get(gid) == "off" and await self._async_pump(
+                    group, True
+                ):
+                    del self._switched[gid]
+            elif item.get("wanted", True):
+                self._switched.pop(gid, None)
+        for cid, circuit in circuits.items():
+            item = advice["circuits"].get(cid, {})
+            if (
+                item.get("action") == "close"
+                and self._switched.get(cid) != "close"
+                and await self._async_valve(circuit, False)
+            ):
+                self._switched[cid] = "close"
+        for part_id in list(self._switched):
+            if part_id not in circuits and part_id not in groups:
+                del self._switched[part_id]
+        return self._switched != before
 
     async def _async_apply(
         self, room_id: str, climate: str, desired: Desired | None
@@ -475,13 +670,13 @@ class ControlEngine:
         except (HomeAssistantError, vol.Invalid, ValueError) as err:
             _LOGGER.warning("Could not set %s (%s): %s", climate, service, err)
 
-    async def _async_heat(self, climate: str) -> None:
+    async def _async_heat(self, climate: str, prefer: str | None = None) -> None:
         """Switch a thermostat on if it is off."""
         state = self.hass.states.get(climate)
         if state is None or state.state != "off":
             return
         modes = [m for m in state.attributes.get("hvac_modes", []) if m != "off"]
-        for mode in ("heat", "auto", *modes):
+        for mode in (prefer, "heat", "auto", *modes):
             if mode in modes:
                 await self._async_call("set_hvac_mode", climate, hvac_mode=mode)
                 return
@@ -526,6 +721,9 @@ class ControlEngine:
             "schedules": self.schedules,
             "rules": self.rules,
             "stoves": self.stoves,
+            "window": self.window,
+            "switching": self._switching(),
+            "switched": self._switched,
             "active_rules": self._active,
             "burning": self._burning,
             "rooms": self._status,

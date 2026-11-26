@@ -34,7 +34,8 @@
         "name": "Operating mode",
         "state": {
           "off": "Off",
-          "observe": "Observe"
+          "observe": "Observe",
+          "active": "Switching"
         }
       }
     },

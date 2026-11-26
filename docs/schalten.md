@@ -1,8 +1,9 @@
-# Was würde geschaltet
+# Stränge und Pumpe schalten
 
 Heizzentrale rechnet laufend aus, welche Stränge gebraucht werden, und zeigt
-das an. **In dieser Beta schaltet sie dabei nichts.** Du kannst in Ruhe
-prüfen, ob ihre Entscheidungen zu deinem Haus passen.
+das an. **Solange der Betriebsmodus auf „Beobachtet“ steht, schaltet sie
+dabei nichts.** Du kannst in Ruhe prüfen, ob ihre Entscheidungen zu deinem
+Haus passen, und danach auf „Schaltet“ stellen.
 
 ![Würde jetzt schließen](assets/wuerde-schalten.webp){ loading=lazy }
 
@@ -31,10 +32,41 @@ Ein Klick auf den Strang oder die Pumpengruppe nennt den Grund in Worten.
 
 ## Betriebsmodus
 
+Den Modus wählst du in den Einstellungen der Ansicht.
+
 | Modus | Bedeutung |
 | --- | --- |
 | Aus | Heizzentrale zeigt nur Messwerte. |
-| Beobachtet | Sie zeigt zusätzlich, was sie schalten würde. |
+| Beobachtet | Sie zeigt zusätzlich, was sie schalten würde. Das ist der Standard. |
+| Schaltet | Sie schließt und öffnet Stränge und schaltet die Pumpengruppe. |
 
-Einen aktiven Modus, der Stränge und Pumpen wirklich schaltet, gibt es noch
-nicht. Er kommt erst, wenn sich die Vorschau im Alltag bewährt hat.
+„Schaltet“ musst du ein zweites Mal bestätigen. Zeitpläne, Abwesenheit und
+Öfen haben ihren eigenen Schalter „Nur anzeigen / Anwenden“ und sind davon
+unabhängig.
+
+## Was im Modus „Schaltet“ gilt
+
+- **Öffnen geht vor.** Braucht ein Raum Wärme, wird sein Strang sofort
+  geöffnet, auch wenn ihn jemand von Hand geschlossen hat.
+- **Geschlossen wird einmal.** Öffnest du einen Strang von Hand, den
+  Heizzentrale geschlossen hat, bleibt er offen, bis wieder ein Raum Wärme
+  braucht und der Bedarf danach erneut endet.
+- **Reihenfolge:** Erst öffnet der Strang, dann startet die Pumpengruppe.
+  Beim Abschalten stoppt erst die Pumpengruppe, dann schließt der Strang.
+- **Die Pumpengruppe wird nur wieder eingeschaltet, wenn Heizzentrale sie
+  selbst ausgeschaltet hat.** Hast du die Heizung von Hand ausgeschaltet,
+  bleibt sie aus.
+- **Frostschutz:** Ein Raum unter 8 °C zählt immer als „will Wärme“, egal
+  wie sein Thermostat steht. Sein Strang bleibt offen.
+- **Zurück auf „Beobachtet“ oder „Aus“:** Alles, was Heizzentrale
+  geschlossen oder ausgeschaltet hat, wird wieder geöffnet und
+  eingeschaltet.
+- **Nach einem Neustart** von Home Assistant fasst sie nichts an, bis der
+  gespeicherte Modus wieder geladen ist.
+
+!!! warning "Wenn Home Assistant ausfällt"
+    Fällt Home Assistant aus, während ein Strang geschlossen ist, bleibt er
+    geschlossen, bis Home Assistant wieder läuft. Eine Überwachung direkt im
+    Stellantrieb-Schalter, die dann von selbst öffnet, ist geplant. Für
+    Stränge, die nie kalt werden dürfen, eignen sich stromlos offene
+    Antriebe (NO).

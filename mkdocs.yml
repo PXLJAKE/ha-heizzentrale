@@ -64,7 +64,7 @@ nav:
       - Abwesenheit: abwesenheit.md
       - Öfen: oefen.md
   - Verstehen:
-      - Was würde geschaltet: schalten.md
+      - Stränge und Pumpe schalten: schalten.md
       - Sicherheit: sicherheit.md
   - Hilfe:
       - Fragen und Fehlersuche: hilfe.md

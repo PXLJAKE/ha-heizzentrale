@@ -15,6 +15,9 @@ CLOSE_AFTER_MINUTES = 10.0
 # Without a reported heating state a room calls when it is this far below
 # its setpoint.
 CALL_BELOW_TARGET = 0.2
+# A room this cold always counts as asking for heat, whatever its thermostat
+# is set to, so its strand stays open and pipes cannot freeze.
+FROST_BELOW = 8.0
 
 ACTION_OPEN = "open"
 ACTION_CLOSE = "close"
@@ -47,6 +50,8 @@ def room_calls(room: RoomReading) -> bool | None:
     """Whether a room asks for heat. None means it cannot be told."""
     if room.state is None or room.state.lower() in _UNKNOWN:
         return None
+    if room.current is not None and room.current < FROST_BELOW:
+        return True
     if room.state == "off" or room.window_open:
         return False
     if room.hvac_action:

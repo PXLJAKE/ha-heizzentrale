@@ -34,7 +34,8 @@
         "name": "Betriebsmodus",
         "state": {
           "off": "Aus",
-          "observe": "Beobachten"
+          "observe": "Beobachten",
+          "active": "Schaltet"
         }
       }
     },
