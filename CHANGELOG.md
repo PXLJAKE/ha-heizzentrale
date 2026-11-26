@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.9.0-beta.1
+
+- Arrange the house: the pencil in the house view starts an edit mode. Rooms
+  can be dragged into another order or onto another floor, by mouse, touch or
+  with arrow buttons. A room moved to another floor also follows the
+  schedules of that floor.
+- Extra sensors: any tile (room, heat source, buffer, pump group, circuit)
+  can show further sensors with a short label, for example humidity or the
+  flame temperature of the boiler.
+
 ## 0.8.0-beta.1
 
 - Stoves: a wood stove with a temperature sensor and a threshold from which it

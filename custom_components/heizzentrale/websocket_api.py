@@ -15,6 +15,7 @@ from homeassistant.config_entries import ConfigEntryState
 from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers import area_registry as ar
+from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers import floor_registry as fr
@@ -66,6 +67,7 @@ def async_register_websocket_api(hass: HomeAssistant) -> None:
     websocket_api.async_register_command(hass, ws_balancing_log)
     websocket_api.async_register_command(hass, ws_control_get)
     websocket_api.async_register_command(hass, ws_control_save)
+    websocket_api.async_register_command(hass, ws_layout_save)
 
 
 def as_list(value: Any) -> list[str]:
@@ -117,6 +119,9 @@ def async_describe_plants(hass: HomeAssistant) -> list[dict[str, Any]]:
             "floors": [],
         }
         floor_ids: set[str] = set()
+        runtime = getattr(entry, "runtime_data", None)
+        layout: dict[str, Any] = runtime.manager.layout if runtime else {}
+        placed: dict[str, str] = layout.get("floors", {})
         for subentry in entry.subentries.values():
             sid, data = subentry.subentry_id, subentry.data
             base = {"id": sid, "name": subentry.title}
@@ -174,6 +179,9 @@ def async_describe_plants(hass: HomeAssistant) -> list[dict[str, Any]]:
                 floor_id = data.get(CONF_FLOOR) or floor_of(
                     data.get(CONF_CLIMATE), *as_list(data.get(CONF_WINDOW))
                 )
+                # A room dragged to another floor in the card stays there.
+                if (moved := placed.get(sid)) and floors.async_get_floor(moved):
+                    floor_id = moved
                 if floor_id:
                     floor_ids.add(floor_id)
                 plant["rooms"].append(
@@ -200,6 +208,17 @@ def async_describe_plants(hass: HomeAssistant) -> list[dict[str, Any]]:
         plant["floors"].sort(
             key=lambda item: (item["level"] is None, -(item["level"] or 0))
         )
+        order = {room_id: i for i, room_id in enumerate(layout.get("order", []))}
+        plant["rooms"].sort(key=lambda room: order.get(room["id"], len(order)))
+        plant["all_floors"] = sorted(
+            (
+                {"id": floor.floor_id, "name": floor.name, "level": floor.level}
+                for floor in floors.async_list_floors()
+            ),
+            key=lambda item: (item["level"] is None, -(item["level"] or 0)),
+        )
+        plant["extra_sensors"] = layout.get("sensors", [])
+        plant["placed_floors"] = placed
         plants.append(plant)
     return plants
 
@@ -409,3 +428,46 @@ async def ws_control_save(
         msg.get("enabled"), msg.get("schedules"), msg.get("rules"), msg.get("stoves")
     )
     connection.send_result(msg["id"], manager.control.payload())
+
+
+_LAYOUT_ID = vol.All(str, vol.Length(min=1, max=40))
+_EXTRA_SENSOR = vol.Schema(
+    {
+        vol.Required("id"): _LAYOUT_ID,
+        vol.Required("entity"): cv.entity_id,
+        vol.Optional("label", default=""): vol.All(str, vol.Length(max=30)),
+        # The tile it is shown on, such as "room:<id>" or "source:<id>".
+        vol.Required("place"): vol.All(
+            str, vol.Match(r"^(room|source|buffer|pump|circuit):.{1,40}$")
+        ),
+    }
+)
+
+
+@websocket_api.require_admin
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): "heizzentrale/layout/save",
+        vol.Required("entry_id"): str,
+        vol.Optional("order"): vol.All([_LAYOUT_ID], vol.Length(max=300)),
+        vol.Optional("floors"): vol.All({_LAYOUT_ID: _LAYOUT_ID}, vol.Length(max=300)),
+        vol.Optional("sensors"): vol.All([_EXTRA_SENSOR], vol.Length(max=60)),
+    }
+)
+@websocket_api.async_response
+async def ws_layout_save(
+    hass: HomeAssistant,
+    connection: websocket_api.ActiveConnection,
+    msg: dict[str, Any],
+) -> None:
+    """Store how the house view is arranged."""
+    if (manager := _manager(hass, connection, msg)) is None:
+        return
+    manager.layout = {
+        **manager.layout,
+        **{key: msg[key] for key in ("order", "floors", "sensors") if key in msg},
+    }
+    await manager.async_save()
+    # Floors of rooms feed schedules and absence rules, so evaluate again.
+    await manager.control.async_run()
+    connection.send_result(msg["id"], {"plants": async_describe_plants(hass)})

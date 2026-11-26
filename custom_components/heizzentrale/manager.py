@@ -69,6 +69,9 @@ class PlantManager:
         self._unsub: CALLBACK_TYPE | None = None
         self.result: BalancingResult = analyse([])
         self.control = ControlEngine(hass, self)
+        # How the house view is arranged: room order, floors picked in the
+        # card and extra sensors shown on tiles.
+        self.layout: dict[str, Any] = {}
 
     # -- lifecycle ----------------------------------------------------------
 
@@ -81,6 +84,7 @@ class PlantManager:
             }
             self.log = list(data.get("log", []))
             self.control.load(data.get("control", {}))
+            self.layout = dict(data.get("layout", {}))
         self._histories = {
             subentry.subentry_id: SpreadHistory() for subentry in self.circuits
         }
@@ -101,7 +105,12 @@ class PlantManager:
     async def async_save(self) -> None:
         """Write everything that has to survive a restart."""
         await self._store.async_save(
-            {"offsets": self.offsets, "log": self.log, "control": self.control.dump()}
+            {
+                "offsets": self.offsets,
+                "log": self.log,
+                "control": self.control.dump(),
+                "layout": self.layout,
+            }
         )
 
     # -- readings -----------------------------------------------------------
