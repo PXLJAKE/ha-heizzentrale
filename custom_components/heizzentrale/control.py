@@ -30,17 +30,21 @@ from homeassistant.helpers.event import (
 from homeassistant.util import dt as dt_util
 
 from .const import CONF_CONTROL_OFF, CONF_CONTROL_ON, OperatingMode
-from .demand import RoomReading, circuit_advice, pump_advice
+from .demand import RoomReading, circuit_advice, pump_advice, room_calls
 from .flow import FlowControl
 from .model import circuit_open, parse_float
+from .preheat import CLOSE_ENOUGH, Learner, lead_minutes
 from .scheduling import (
+    SOURCE_PREHEAT,
     SOURCE_SCHEDULE,
     SOURCE_WINDOW,
     Desired,
     desired_for_room,
     is_present,
+    next_point,
     parse_time,
     rule_active,
+    schedule_for_room,
     stove_burning,
 )
 
@@ -145,6 +149,20 @@ WINDOW_SCHEMA = vol.Schema(
     }
 )
 DEFAULT_WINDOW = {"enabled": True, "delay_min": 2.0}
+# Start heating before a switch point so the room is warm at that time.
+PREHEAT_SCHEMA = vol.Schema(
+    {
+        vol.Optional("enabled", default=False): bool,
+        vol.Optional("max_min", default=120): vol.All(
+            vol.Coerce(float), vol.Range(min=15, max=360)
+        ),
+    }
+)
+DEFAULT_PREHEAT = {"enabled": False, "max_min": 120.0}
+# The setpoint an action leads to is read this long after it was applied,
+# once the thermostat has taken it over and before someone changes it.
+NOTE_TARGET_AFTER = 60.0
+NOTE_TARGET_UNTIL = 600.0
 
 
 class ControlEngine:
@@ -160,6 +178,11 @@ class ControlEngine:
         self.stoves: list[dict[str, Any]] = []
         self.window: dict[str, Any] = dict(DEFAULT_WINDOW)
         self.flow = FlowControl(hass, manager)
+        self.preheat: dict[str, Any] = dict(DEFAULT_PREHEAT)
+        self.learner = Learner()
+        # Switch point (minute of the week) a room is being preheated for.
+        self._preheating: dict[str, int] = {}
+        self._applied_at: dict[str, datetime] = {}
         # Thermostat state before an open window switched it off, per room.
         self._window_saved: dict[str, dict[str, Any]] = {}
         # Strands the engine closed and pump groups it switched off.
@@ -192,6 +215,8 @@ class ControlEngine:
         self.stoves = list(data.get("stoves", []))
         self.window = {**DEFAULT_WINDOW, **data.get("window", {})}
         self.flow.load(data.get("flow", {}))
+        self.preheat = {**DEFAULT_PREHEAT, **data.get("preheat", {})}
+        self.learner.load(data.get("learned", {}))
         self._window_saved = dict(data.get("window_saved", {}))
         self._switched = dict(data.get("switched", {}))
         self._burning = list(data.get("burning", []))
@@ -208,6 +233,8 @@ class ControlEngine:
             "stoves": self.stoves,
             "window": self.window,
             "flow": self.flow.dump(),
+            "preheat": self.preheat,
+            "learned": self.learner.dump(),
             "window_saved": self._window_saved,
             "switched": self._switched,
             "burning": self._burning,
@@ -284,6 +311,7 @@ class ControlEngine:
         stoves: list[dict[str, Any]] | None = None,
         window: dict[str, Any] | None = None,
         flow: dict[str, Any] | None = None,
+        preheat: dict[str, Any] | None = None,
     ) -> None:
         """Store changed settings and apply them right away."""
         if enabled is not None:
@@ -298,6 +326,8 @@ class ControlEngine:
             self.window = window
         if flow is not None:
             await self.flow.async_save(flow)
+        if preheat is not None:
+            self.preheat = preheat
         self._track_entities()
         await self._manager.async_save()
         await self.async_run()
@@ -444,6 +474,8 @@ class ControlEngine:
             # The plant is not listed yet while it is still being set up.
             self._track_entities(plant)
             self._advise(plant, now)
+            if "entry_id" in plant:
+                self.learner.forget({room["id"] for room in plant["rooms"]})
             for room in plant["rooms"]:
                 room_id = room["id"]
                 climate = room.get("climate_entity")
@@ -458,6 +490,11 @@ class ControlEngine:
                 )
                 if not climate:
                     continue
+                reading = self._reading(room)
+                changed |= self._learn(room_id, reading, now)
+                desired = self._preheated(
+                    room, reading, desired, local.weekday(), minute
+                )
                 airing = self._airing(room, now)
                 changed |= await self._async_window(room_id, climate, airing)
                 if airing:
@@ -488,6 +525,78 @@ class ControlEngine:
             )
             if changed:
                 await self._manager.async_save()
+
+    def _learn(self, room_id: str, reading: RoomReading, now: datetime) -> bool:
+        """Watch how fast a room warms up and what its actions lead to."""
+        heating = room_calls(reading) is True and not reading.window_open
+        changed = self.learner.observe(room_id, heating, reading.current, now)
+        applied_at = self._applied_at.get(room_id)
+        action = self._applied.get(room_id)
+        if applied_at is not None and action and reading.state != "off":
+            age = (now - applied_at).total_seconds()
+            if NOTE_TARGET_AFTER <= age <= NOTE_TARGET_UNTIL:
+                changed |= self.learner.note_target(room_id, action, reading.target)
+            elif age > NOTE_TARGET_UNTIL:
+                del self._applied_at[room_id]
+        return changed
+
+    def _preheated(
+        self,
+        room: dict[str, Any],
+        reading: RoomReading,
+        desired: Desired | None,
+        weekday: int,
+        minute: int,
+    ) -> Desired | None:
+        """Bring the next switch point forward if the room needs the time.
+
+        Only towards warmer, only for a schedule, and only with a measured
+        heating rate and a known setpoint. Once started it stays until the
+        switch point, so a room that warms faster does not flip back.
+        """
+        room_id = room["id"]
+        if (
+            not self.preheat["enabled"]
+            or desired is None
+            or desired.source != SOURCE_SCHEDULE
+        ):
+            self._preheating.pop(room_id, None)
+            return desired
+        schedule = schedule_for_room(room_id, room.get("floor"), self.schedules)
+        upcoming = (
+            next_point(schedule.get("points", ()), weekday, minute)
+            if schedule
+            else None
+        )
+        if upcoming is None or upcoming[0] == desired.action:
+            self._preheating.pop(room_id, None)
+            return desired
+        action, wait, at = upcoming
+        early = Desired(action, SOURCE_PREHEAT, desired.name)
+        if self._preheating.get(room_id) == at:
+            return early
+        self._preheating.pop(room_id, None)
+        if wait > self.preheat["max_min"]:
+            return desired
+        target = self.learner.target_for(room_id, action)
+        if target is None:
+            return desired
+        if desired.action != ACTION_OFF:
+            current_target = self.learner.target_for(room_id, desired.action)
+            if current_target is None:
+                current_target = reading.target
+            if current_target is None or target <= current_target + CLOSE_ENOUGH:
+                return desired
+        lead = lead_minutes(
+            reading.current,
+            target,
+            self.learner.rates.get(room_id),
+            self.preheat["max_min"],
+        )
+        if not lead or wait > lead:
+            return desired
+        self._preheating[room_id] = at
+        return early
 
     def _airing(self, room: dict[str, Any], now: datetime) -> bool:
         """Whether a window of the room has been open for long enough."""
@@ -661,7 +770,7 @@ class ControlEngine:
             return had
         if self._applied.get(room_id) == desired.action:
             return False
-        if desired.source != SOURCE_SCHEDULE:
+        if desired.source not in (SOURCE_SCHEDULE, SOURCE_PREHEAT):
             if room_id not in self._restore and (
                 state := self.hass.states.get(climate)
             ):
@@ -675,6 +784,7 @@ class ControlEngine:
             self._restore.pop(room_id, None)
         await self._async_action(climate, desired.action)
         self._applied[room_id] = desired.action
+        self._applied_at[room_id] = dt_util.utcnow()
         return True
 
     async def _async_call(self, service: str, climate: str, **data: Any) -> None:
@@ -738,6 +848,7 @@ class ControlEngine:
             "stoves": self.stoves,
             "window": self.window,
             "flow": self.flow.payload(),
+            "preheat": {**self.preheat, "rates": self.learner.rates},
             "switching": self._switching(),
             "switched": self._switched,
             "active_rules": self._active,

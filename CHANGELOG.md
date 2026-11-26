@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.13.0-beta.1
+
+- Preheating: Heizzentrale measures how fast each room warms up and, if
+  switched on, changes the thermostat early enough for the room to be warm
+  at the switch point. Only towards warmer, capped (default 120 minutes),
+  and never for a room without a measured rate.
+
 ## 0.12.0-beta.1
 
 - Flow temperature by demand: Heizzentrale can nudge one number of the heat

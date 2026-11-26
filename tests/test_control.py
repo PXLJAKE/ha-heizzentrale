@@ -613,3 +613,94 @@ async def test_flow_by_demand_lowers_slowly_when_demand_is_covered(
         await control.async_run()
     assert made == [21.5]
     assert control.payload()["flow"]["reason"] == "at_min"
+
+
+async def test_preheat_brings_the_switch_point_forward(
+    hass: HomeAssistant,
+    freezer: FrozenDateTimeFactory,
+    calls: list[tuple[str, dict[str, Any]]],
+) -> None:
+    # 04:00 local time on a Thursday.
+    freezer.move_to(dt_util.as_utc(dt_util.parse_datetime("2026-11-26 04:00:00")))
+    hass.states.async_set(
+        "climate.bad",
+        "heat",
+        {**ATTRS, "preset_mode": "eco", "temperature": 18, "current_temperature": 18},
+    )
+    entry = _entry(ROOM)
+    await _setup(hass, entry)
+    room_id = next(iter(entry.subentries))
+    control = entry.runtime_data.manager.control
+    schedule = {
+        "id": "s1",
+        "name": "Werktage",
+        "rooms": [room_id],
+        "floors": [],
+        "points": [
+            {"days": ALL_DAYS, "time": "06:00", "action": "temperature:21"},
+            {"days": ALL_DAYS, "time": "22:00", "action": "temperature:18"},
+        ],
+    }
+    await control.async_save(
+        enabled=True, schedules=[schedule], preheat={"enabled": True, "max_min": 180}
+    )
+    assert calls[-1] == (
+        "set_temperature",
+        {"entity_id": "climate.bad", "temperature": 18.0},
+    )
+    calls.clear()
+
+    # Without a measured heating rate nothing is brought forward.
+    freezer.tick(timedelta(minutes=100))  # 05:40
+    await control.async_run()
+    assert calls == []
+
+    # The room warms 2 K per hour: 3 K need 90 minutes, so 04:30 at the latest.
+    control.learner.rates[room_id] = 2.0
+    await control.async_run()
+    assert calls == [
+        ("set_temperature", {"entity_id": "climate.bad", "temperature": 21.0})
+    ]
+    assert control.payload()["rooms"][room_id]["source"] == "preheat"
+
+    # It stays, even when the room is already warm, and the point changes nothing.
+    hass.states.async_set(
+        "climate.bad", "heat", {**ATTRS, "temperature": 21, "current_temperature": 21}
+    )
+    freezer.tick(timedelta(minutes=10))
+    await control.async_run()
+    freezer.tick(timedelta(minutes=15))  # 06:05
+    await control.async_run()
+    assert len(calls) == 1
+    assert control.payload()["rooms"][room_id]["source"] == "schedule"
+
+
+async def test_preheat_never_starts_early_towards_colder(
+    hass: HomeAssistant,
+    freezer: FrozenDateTimeFactory,
+    calls: list[tuple[str, dict[str, Any]]],
+) -> None:
+    freezer.move_to(dt_util.as_utc(dt_util.parse_datetime("2026-11-26 21:30:00")))
+    hass.states.async_set(
+        "climate.bad", "heat", {**ATTRS, "temperature": 21, "current_temperature": 19}
+    )
+    entry = _entry(ROOM)
+    await _setup(hass, entry)
+    room_id = next(iter(entry.subentries))
+    control = entry.runtime_data.manager.control
+    control.learner.rates[room_id] = 1.0
+    schedule = {
+        "id": "s1",
+        "name": "Werktage",
+        "rooms": [room_id],
+        "floors": [],
+        "points": [
+            {"days": ALL_DAYS, "time": "06:00", "action": "temperature:21"},
+            {"days": ALL_DAYS, "time": "22:00", "action": "temperature:18"},
+        ],
+    }
+    await control.async_save(
+        enabled=True, schedules=[schedule], preheat={"enabled": True, "max_min": 180}
+    )
+    assert control.payload()["rooms"][room_id]["action"] == "temperature:21"
+    assert control.payload()["rooms"][room_id]["source"] == "schedule"

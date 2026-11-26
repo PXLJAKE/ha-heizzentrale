@@ -2,7 +2,7 @@
 
 !!! warning "Beta"
     Heizzentrale ist in Entwicklung. Diese Seite beschreibt den Stand der
-    Version 0.12.
+    Version 0.13.
 
 ## Das gibt es
 
@@ -17,6 +17,7 @@
 - Offene Fenster schalten den Raum aus
 - Frostschutz: kalte Räume halten ihren Strang offen
 - Vorlauf nach Bedarf: die Heizkurve in kleinen Schritten nachstellen
+- Rechtzeitig vorheizen mit gemessener Aufheizzeit je Raum
 - Deutsch und Englisch
 
 ## Das ist geplant

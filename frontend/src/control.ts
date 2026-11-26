@@ -40,7 +40,7 @@ export interface Stove {
 
 export interface RoomPlan {
   action: string;
-  source: "schedule" | "absence" | "stove" | "window";
+  source: "schedule" | "absence" | "stove" | "window" | "preheat";
   name: string;
   applied: boolean;
 }
@@ -67,6 +67,7 @@ export interface Control {
   stoves?: Stove[];
   window?: { enabled: boolean; delay_min: number };
   flow?: Flow;
+  preheat?: { enabled: boolean; max_min: number; rates?: Record<string, number> };
   /** True while strands and pump groups are switched for real. */
   switching?: boolean;
   /** Strands Heizzentrale closed and pump groups it switched off. */
@@ -1039,9 +1040,70 @@ export class HeizzentraleControl extends LitElement {
     `;
   }
 
+  private _renderPreheat(control: Control) {
+    const t = this.t;
+    const preheat = control.preheat ?? { enabled: false, max_min: 120 };
+    const settings = { enabled: preheat.enabled, max_min: preheat.max_min };
+    const learned = (this.plant?.rooms ?? [])
+      .filter((room) => preheat.rates?.[room.id] !== undefined)
+      .map(
+        (room) =>
+          `${room.name} ${preheat.rates![room.id].toLocaleString(this.language || undefined, {
+            maximumFractionDigits: 1,
+          })}`,
+      );
+    return html`
+      <section class="set">
+        <h3>${t("set_preheat")}</h3>
+        <div class="choices">
+          ${[false, true].map(
+            (enabled) =>
+              html`<button
+                class="choice ${preheat.enabled === enabled ? "on" : ""}"
+                aria-pressed=${preheat.enabled === enabled}
+                ?disabled=${this._busy}
+                @click=${() => this._save({ preheat: { ...settings, enabled } })}
+              >
+                ${t(enabled ? "preheat_on" : "preheat_off")}
+              </button>`,
+          )}
+        </div>
+        ${preheat.enabled
+          ? html`<label class="field inline">
+              <span class="label">${t("preheat_max")}</span>
+              <input
+                class="short"
+                type="number"
+                min="15"
+                max="360"
+                step="15"
+                .value=${String(preheat.max_min)}
+                @change=${(event: Event) => {
+                  const value = Number((event.target as HTMLInputElement).value);
+                  void this._save({
+                    preheat: {
+                      ...settings,
+                      max_min: Number.isFinite(value) ? Math.min(360, Math.max(15, value)) : 120,
+                    },
+                  });
+                }}
+              />
+            </label>`
+          : nothing}
+        <p class="hint">${t("preheat_hint")}</p>
+        <p class="hint">
+          ${learned.length
+            ? t("preheat_learned", { rooms: learned.join(", ") })
+            : t("preheat_learning")}
+        </p>
+      </section>
+    `;
+  }
+
   private _renderTail(control: Control, windowRule: { enabled: boolean; delay_min: number }) {
     const t = this.t;
     return html`
+      ${this._renderPreheat(control)}
       <section class="set">
         <h3>${t("set_window")}</h3>
         <div class="choices">

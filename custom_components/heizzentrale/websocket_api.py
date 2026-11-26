@@ -52,7 +52,13 @@ from .const import (
     SUBENTRY_ROOM,
     ValveType,
 )
-from .control import RULES_SCHEMA, SCHEDULES_SCHEMA, STOVES_SCHEMA, WINDOW_SCHEMA
+from .control import (
+    PREHEAT_SCHEMA,
+    RULES_SCHEMA,
+    SCHEDULES_SCHEMA,
+    STOVES_SCHEMA,
+    WINDOW_SCHEMA,
+)
 from .flow import FLOW_SCHEMA
 from .manager import PlantManager
 
@@ -416,6 +422,7 @@ def ws_control_get(
         vol.Optional("stoves"): STOVES_SCHEMA,
         vol.Optional("window"): WINDOW_SCHEMA,
         vol.Optional("flow"): FLOW_SCHEMA,
+        vol.Optional("preheat"): PREHEAT_SCHEMA,
     }
 )
 @websocket_api.async_response
@@ -434,6 +441,7 @@ async def ws_control_save(
         msg.get("stoves"),
         msg.get("window"),
         msg.get("flow"),
+        msg.get("preheat"),
     )
     connection.send_result(msg["id"], manager.control.payload())
 
