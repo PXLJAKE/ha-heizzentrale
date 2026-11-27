@@ -39,6 +39,7 @@ Die Pumpe mit Mischer, die den Verteiler mit gemischtem Wasser versorgt.
 | Feld | Bedeutung |
 | --- | --- |
 | Vorlauf, Rücklauf | Fühler hinter dem Mischer. |
+| Soll-Vorlauf | Die Vorlauftemperatur, die der Wärmeerzeuger gerade anstrebt, falls er sie meldet. Steht in der Kachel unter dem gemessenen Wert. Bei ÖkoFEN ist das `L_flowtemp_set` des Heizkreises. |
 | Status | Zeigt, ob die Pumpe läuft. |
 | Steuer-Entität | Womit sich die Pumpengruppe ein- und ausschalten lässt: ein Schalter, ein Thermostat oder eine Auswahl mit Modi. |
 

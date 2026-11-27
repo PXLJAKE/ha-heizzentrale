@@ -30,6 +30,7 @@ from .const import (
     CONF_CONTROL_ON,
     CONF_FLOOR,
     CONF_FLOW,
+    CONF_FLOW_SETPOINT,
     CONF_KIND,
     CONF_OUTDOOR_TEMPERATURE,
     CONF_POWER,
@@ -156,6 +157,7 @@ def async_describe_plants(hass: HomeAssistant) -> list[dict[str, Any]]:
                     base
                     | {
                         "flow_entity": data.get(CONF_FLOW),
+                        "flow_setpoint_entity": data.get(CONF_FLOW_SETPOINT),
                         "return_entity": data.get(CONF_RETURN),
                         "status_entity": data.get(CONF_STATUS),
                         "control_entity": data.get(CONF_CONTROL),

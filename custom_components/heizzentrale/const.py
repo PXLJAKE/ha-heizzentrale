@@ -30,6 +30,7 @@ CONF_SENSORS: Final = "sensor_entities"
 CONF_VOLUME: Final = "volume"
 
 # Pump group (shares CONF_FLOW, CONF_RETURN and CONF_STATUS)
+CONF_FLOW_SETPOINT: Final = "flow_setpoint_entity"
 CONF_CONTROL: Final = "control_entity"
 CONF_CONTROL_OFF: Final = "control_off_option"
 CONF_CONTROL_ON: Final = "control_on_option"

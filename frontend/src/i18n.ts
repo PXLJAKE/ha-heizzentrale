@@ -152,6 +152,8 @@ const en = {
   x_pump:
     "{name} pushes the heating water into the circuits behind it. A mixer, if there is one, sets how hot that water is.",
   x_pump_flow: "Flow temperature behind the mixer: {temp}.",
+  x_pump_flow_set: "The heat source is aiming for {temp} there right now.",
+  target_short: "Target",
   x_pump_needed: "It is needed right now because these circuits are open: {circuits}.",
   x_pump_idle:
     "All circuits behind it are closed, so it has nothing to do. Once switching is enabled, Heizzentrale turns it off in this situation.",
@@ -455,6 +457,8 @@ const de: typeof en = {
   x_pump:
     "{name} drückt das Heizwasser in die Stränge dahinter. Ein Mischer, falls vorhanden, bestimmt, wie heiß dieses Wasser ist.",
   x_pump_flow: "Vorlauftemperatur hinter dem Mischer: {temp}.",
+  x_pump_flow_set: "Der Wärmeerzeuger strebt dort gerade {temp} an.",
+  target_short: "Soll",
   x_pump_needed: "Sie wird gerade gebraucht, weil diese Stränge offen sind: {circuits}.",
   x_pump_idle:
     "Alle Stränge dahinter sind zu, sie hat also nichts zu tun. Sobald das Schalten freigegeben ist, schaltet Heizzentrale sie in dieser Lage aus.",

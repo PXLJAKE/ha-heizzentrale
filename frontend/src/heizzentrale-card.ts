@@ -63,6 +63,7 @@ interface PumpGroup {
   id: string;
   name: string;
   flow_entity?: string | null;
+  flow_setpoint_entity?: string | null;
   return_entity?: string | null;
   status_entity?: string | null;
   control_entity?: string | null;
@@ -1240,6 +1241,11 @@ class HeizzentraleHouseCard extends LitElement {
         <div class="part-name">${group.name}</div>
         <div class="figure">${pumpFigure(running ?? needed)}</div>
         <div class="big">${group.flow_entity ? this._temp(group.flow_entity) : "–"}</div>
+        ${group.flow_setpoint_entity
+          ? html`<div class="target">
+              ${t("target_short")} ${this._temp(group.flow_setpoint_entity)}
+            </div>`
+          : nothing}
         ${group.return_entity
           ? html`<div class="pair">
               <span class="hot">${this._temp(group.flow_entity)}</span>
@@ -1382,6 +1388,10 @@ class HeizzentraleHouseCard extends LitElement {
       lines.push(t("x_pump", { name: group.name }));
       if (group.flow_entity)
         lines.push(t("x_pump_flow", { temp: this._temp(group.flow_entity) }));
+      if (group.flow_setpoint_entity)
+        lines.push(
+          t("x_pump_flow_set", { temp: this._temp(group.flow_setpoint_entity) }),
+        );
       const fed = plant.circuits.filter((circuit) => circuit.pump_group === group.id);
       if (fed.length) {
         const open = fed.filter((circuit) => this._circuitOpen(circuit) !== false);
@@ -2237,6 +2247,10 @@ class HeizzentraleHouseCard extends LitElement {
       font-size: 1.05rem;
       font-weight: 600;
       font-variant-numeric: tabular-nums;
+    }
+    .part .target {
+      font-size: 0.75rem;
+      color: var(--hz-muted);
     }
     .pair {
       display: flex;

@@ -295,6 +295,7 @@ async def test_pump_group_feeds_circuits(
             "data": {
                 CONF_NAME: "Pumpengruppe",
                 "flow_entity": "sensor.mixed_flow",
+                "flow_setpoint_entity": "sensor.mixed_flow_target",
                 "control_entity": "switch.heating_circuit",
             },
         },
@@ -307,6 +308,7 @@ async def test_pump_group_feeds_circuits(
     (group,) = plant["pump_groups"]
     assert group["name"] == "Pumpengruppe"
     assert group["flow_entity"] == "sensor.mixed_flow"
+    assert group["flow_setpoint_entity"] == "sensor.mixed_flow_target"
     assert group["control_entity"] == "switch.heating_circuit"
     assert plant["circuits"][0]["pump_group"] == group["id"]
 

@@ -164,6 +164,7 @@
           "data": {
             "name": "Name",
             "flow_entity": "Flow temperature (optional)",
+            "flow_setpoint_entity": "Target flow temperature (optional)",
             "return_entity": "Return temperature (optional)",
             "status_entity": "Pump status (optional)",
             "control_entity": "Switched by (optional)"
@@ -171,9 +172,10 @@
           "data_description": {
             "name": "For example \"Radiator pump group\".",
             "flow_entity": "Sensor behind the mixer: the temperature of the water going to the circuits.",
+            "flow_setpoint_entity": "The flow temperature your heat source is aiming for right now, if it reports one. It is shown next to the measured value.",
             "return_entity": "Sensor on the common return pipe.",
             "status_entity": "An entity that tells whether the pump is running.",
-            "control_entity": "The entity that turns this pump group or its heating circuit on and off. A switch works, and so does a selection with modes such as off and auto. Heizzentrale does not switch it yet."
+            "control_entity": "The entity that turns this pump group or its heating circuit on and off. A switch works, and so does a selection with modes such as off and auto. Heizzentrale only switches it in the mode \"Switching\"."
           }
         },
         "reconfigure": {
@@ -182,6 +184,7 @@
           "data": {
             "name": "Name",
             "flow_entity": "Flow temperature (optional)",
+            "flow_setpoint_entity": "Target flow temperature (optional)",
             "return_entity": "Return temperature (optional)",
             "status_entity": "Pump status (optional)",
             "control_entity": "Switched by (optional)"
@@ -189,14 +192,15 @@
           "data_description": {
             "name": "For example \"Radiator pump group\".",
             "flow_entity": "Sensor behind the mixer: the temperature of the water going to the circuits.",
+            "flow_setpoint_entity": "The flow temperature your heat source is aiming for right now, if it reports one. It is shown next to the measured value.",
             "return_entity": "Sensor on the common return pipe.",
             "status_entity": "An entity that tells whether the pump is running.",
-            "control_entity": "The entity that turns this pump group or its heating circuit on and off. A switch works, and so does a selection with modes such as off and auto. Heizzentrale does not switch it yet."
+            "control_entity": "The entity that turns this pump group or its heating circuit on and off. A switch works, and so does a selection with modes such as off and auto. Heizzentrale only switches it in the mode \"Switching\"."
           }
         },
         "control_options": {
           "title": "How is it switched?",
-          "description": "{entity} has several modes. Tell Heizzentrale which mode turns the pump group off and which turns it back on. Nothing is switched yet; this is used once switching is enabled.",
+          "description": "{entity} has several modes. Tell Heizzentrale which mode turns the pump group off and which turns it back on. It is only switched in the mode \"Switching\".",
           "data": {
             "control_off_option": "Mode for off",
             "control_on_option": "Mode for on"
@@ -239,7 +243,7 @@
             "system_type": "One-pipe: radiators in a row on one pipe. Two-pipe: every radiator has its own flow and return. If you are not sure, keep two-pipe.",
             "flow_entity": "Sensor on the pipe going to the radiators.",
             "return_entity": "Sensor on the pipe coming back.",
-            "valve_entity": "Switch or valve that opens and closes this circuit. Heizzentrale only reads it for now.",
+            "valve_entity": "Switch or valve that opens and closes this circuit. Heizzentrale only switches it in the mode \"Switching\".",
             "valve_type": "Printed on the actuator: NC means closed without power, NO means open without power.",
             "power_entity": "Shows whether the actuator really draws power.",
             "pump_group": "The pump group that feeds this circuit. Leave empty if there is only one."
@@ -263,7 +267,7 @@
             "system_type": "One-pipe: radiators in a row on one pipe. Two-pipe: every radiator has its own flow and return. If you are not sure, keep two-pipe.",
             "flow_entity": "Sensor on the pipe going to the radiators.",
             "return_entity": "Sensor on the pipe coming back.",
-            "valve_entity": "Switch or valve that opens and closes this circuit. Heizzentrale only reads it for now.",
+            "valve_entity": "Switch or valve that opens and closes this circuit. Heizzentrale only switches it in the mode \"Switching\".",
             "valve_type": "Printed on the actuator: NC means closed without power, NO means open without power.",
             "power_entity": "Shows whether the actuator really draws power.",
             "pump_group": "The pump group that feeds this circuit. Leave empty if there is only one."
