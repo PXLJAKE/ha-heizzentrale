@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.14.0-beta.1
+
+- Pump group: optional target flow temperature. It is shown on the tile
+  below the measured flow temperature and named in the explanation.
+- Setup texts no longer say that nothing is switched yet.
+
 ## 0.13.2-beta.1
 
 - Safety: rooms that hang on no circuit, and circuits without a pump group,

@@ -164,6 +164,7 @@
           "data": {
             "name": "Name",
             "flow_entity": "Vorlauftemperatur (optional)",
+            "flow_setpoint_entity": "Soll-Vorlauftemperatur (optional)",
             "return_entity": "Rücklauftemperatur (optional)",
             "status_entity": "Pumpenstatus (optional)",
             "control_entity": "Geschaltet über (optional)"
@@ -171,9 +172,10 @@
           "data_description": {
             "name": "Zum Beispiel „Pumpengruppe Heizkörper“.",
             "flow_entity": "Fühler hinter dem Mischer: die Temperatur des Wassers, das zu den Strängen geht.",
+            "flow_setpoint_entity": "Die Vorlauftemperatur, die dein Wärmeerzeuger gerade anstrebt, falls er sie meldet. Sie wird neben dem gemessenen Wert angezeigt.",
             "return_entity": "Fühler am gemeinsamen Rücklauf.",
             "status_entity": "Eine Entität, die zeigt, ob die Pumpe läuft.",
-            "control_entity": "Die Entität, die diese Pumpengruppe oder ihren Heizkreis ein- und ausschaltet. Ein Schalter geht, ebenso eine Auswahl mit Modi wie Aus und Auto. Heizzentrale schaltet sie noch nicht."
+            "control_entity": "Die Entität, die diese Pumpengruppe oder ihren Heizkreis ein- und ausschaltet. Ein Schalter geht, ebenso eine Auswahl mit Modi wie Aus und Auto. Heizzentrale schaltet sie nur im Modus „Schaltet“."
           }
         },
         "reconfigure": {
@@ -182,6 +184,7 @@
           "data": {
             "name": "Name",
             "flow_entity": "Vorlauftemperatur (optional)",
+            "flow_setpoint_entity": "Soll-Vorlauftemperatur (optional)",
             "return_entity": "Rücklauftemperatur (optional)",
             "status_entity": "Pumpenstatus (optional)",
             "control_entity": "Geschaltet über (optional)"
@@ -189,14 +192,15 @@
           "data_description": {
             "name": "Zum Beispiel „Pumpengruppe Heizkörper“.",
             "flow_entity": "Fühler hinter dem Mischer: die Temperatur des Wassers, das zu den Strängen geht.",
+            "flow_setpoint_entity": "Die Vorlauftemperatur, die dein Wärmeerzeuger gerade anstrebt, falls er sie meldet. Sie wird neben dem gemessenen Wert angezeigt.",
             "return_entity": "Fühler am gemeinsamen Rücklauf.",
             "status_entity": "Eine Entität, die zeigt, ob die Pumpe läuft.",
-            "control_entity": "Die Entität, die diese Pumpengruppe oder ihren Heizkreis ein- und ausschaltet. Ein Schalter geht, ebenso eine Auswahl mit Modi wie Aus und Auto. Heizzentrale schaltet sie noch nicht."
+            "control_entity": "Die Entität, die diese Pumpengruppe oder ihren Heizkreis ein- und ausschaltet. Ein Schalter geht, ebenso eine Auswahl mit Modi wie Aus und Auto. Heizzentrale schaltet sie nur im Modus „Schaltet“."
           }
         },
         "control_options": {
           "title": "Wie wird geschaltet?",
-          "description": "{entity} hat mehrere Modi. Sag Heizzentrale, welcher Modus die Pumpengruppe ausschaltet und welcher sie wieder einschaltet. Geschaltet wird noch nichts; das wird benutzt, sobald das Schalten freigegeben ist.",
+          "description": "{entity} hat mehrere Modi. Sag Heizzentrale, welcher Modus die Pumpengruppe ausschaltet und welcher sie wieder einschaltet. Geschaltet wird nur im Modus „Schaltet“.",
           "data": {
             "control_off_option": "Modus für Aus",
             "control_on_option": "Modus für An"
@@ -239,7 +243,7 @@
             "system_type": "Einrohr: Heizkörper hängen nacheinander an einem Rohr. Zweirohr: Jeder Heizkörper hat eigenen Vor- und Rücklauf. Wenn du unsicher bist, lass Zweirohr.",
             "flow_entity": "Fühler am Rohr zu den Heizkörpern.",
             "return_entity": "Fühler am Rohr, das zurückkommt.",
-            "valve_entity": "Schalter oder Ventil, das diesen Strang öffnet und schließt. Heizzentrale liest ihn vorerst nur.",
+            "valve_entity": "Schalter oder Ventil, das diesen Strang öffnet und schließt. Heizzentrale schaltet ihn nur im Modus „Schaltet“.",
             "valve_type": "Steht auf dem Antrieb: NC heißt stromlos zu, NO heißt stromlos offen.",
             "power_entity": "Zeigt, ob der Antrieb wirklich Strom zieht.",
             "pump_group": "Die Pumpengruppe, die diesen Strang versorgt. Leer lassen, wenn es nur eine gibt."
@@ -263,7 +267,7 @@
             "system_type": "Einrohr: Heizkörper hängen nacheinander an einem Rohr. Zweirohr: Jeder Heizkörper hat eigenen Vor- und Rücklauf. Wenn du unsicher bist, lass Zweirohr.",
             "flow_entity": "Fühler am Rohr zu den Heizkörpern.",
             "return_entity": "Fühler am Rohr, das zurückkommt.",
-            "valve_entity": "Schalter oder Ventil, das diesen Strang öffnet und schließt. Heizzentrale liest ihn vorerst nur.",
+            "valve_entity": "Schalter oder Ventil, das diesen Strang öffnet und schließt. Heizzentrale schaltet ihn nur im Modus „Schaltet“.",
             "valve_type": "Steht auf dem Antrieb: NC heißt stromlos zu, NO heißt stromlos offen.",
             "power_entity": "Zeigt, ob der Antrieb wirklich Strom zieht.",
             "pump_group": "Die Pumpengruppe, die diesen Strang versorgt. Leer lassen, wenn es nur eine gibt."

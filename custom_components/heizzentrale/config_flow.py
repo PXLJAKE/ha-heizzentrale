@@ -30,6 +30,7 @@ from .const import (
     CONF_CONTROL_ON,
     CONF_FLOOR,
     CONF_FLOW,
+    CONF_FLOW_SETPOINT,
     CONF_KIND,
     CONF_OUTDOOR_TEMPERATURE,
     CONF_POWER,
@@ -250,6 +251,7 @@ class PumpGroupFlow(_PartFlow):
             {
                 vol.Required(CONF_NAME): _NAME,
                 vol.Optional(CONF_FLOW): _TEMPERATURE,
+                vol.Optional(CONF_FLOW_SETPOINT): _TEMPERATURE,
                 vol.Optional(CONF_RETURN): _TEMPERATURE,
                 vol.Optional(CONF_STATUS): selector.EntitySelector(
                     selector.EntitySelectorConfig(

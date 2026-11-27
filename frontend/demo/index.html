@@ -36,7 +36,7 @@ const states = {
   "sensor.outside": T(4.6),
   "sensor.boiler": T(68.4), "sensor.boiler_state": B("heating"),
   "sensor.buf_top": T(62.1), "sensor.buf_mid": T(51.3), "sensor.buf_bottom": T(38.2), "sensor.buf_mean": T(50.5),
-  "sensor.pg_vl": T(56.2), "sensor.pg_rl": T(45.3), "binary_sensor.pg_pump": B("on"),
+  "sensor.pg_vl": T(56.2), "sensor.pg_vl_soll": T(58.0), "sensor.pg_rl": T(45.3), "binary_sensor.pg_pump": B("on"),
   "sensor.eg_vl": T(55.8), "sensor.eg_rl": T(46.9), "sensor.eg_spread": B("8.9"), "binary_sensor.eg_open": B("on"),
   "sensor.og_vl": T(55.6), "sensor.og_rl": T(44.1), "sensor.og_spread": B("11.5"), "binary_sensor.og_open": B("on"),
   "sensor.dg_vl": T(31.2), "sensor.dg_rl": T(29.8), "sensor.dg_spread": B("1.4"), "binary_sensor.dg_open": B("off"),
@@ -60,7 +60,7 @@ const r = (id, name, climate, circuit, floor, win) => ({ id, name, climate_entit
 const plant = { entry_id: "demo", name: "Heizung", mode_entity: "select.mode", outdoor_entity: "sensor.outside",
   heat_sources: [{ id: "k", name: "Pellematic", kind: "pellet", temperature_entity: "sensor.boiler", status_entity: "sensor.boiler_state" }],
   buffers: [{ id: "p", name: "Puffer", sensor_entities: ["sensor.buf_top", "sensor.buf_mid", "sensor.buf_bottom"], volume: 550, mean_entity: "sensor.buf_mean" }],
-  pump_groups: [{ id: "pg", name: "Pumpengruppe", flow_entity: "sensor.pg_vl", return_entity: "sensor.pg_rl", status_entity: "binary_sensor.pg_pump", control_entity: "switch.hk1" }],
+  pump_groups: [{ id: "pg", name: "Pumpengruppe", flow_entity: "sensor.pg_vl", flow_setpoint_entity: "sensor.pg_vl_soll", return_entity: "sensor.pg_rl", status_entity: "binary_sensor.pg_pump", control_entity: "switch.hk1" }],
   circuits: [c("eg", "EG", "one_pipe"), c("og", "OG", "one_pipe"), c("dg", "DG", "two_pipe"), c("saal", "Saal", "two_pipe")],
   floors: [{ id: "dg", name: "Dachgeschoss", level: 2 }, { id: "og", name: "1. Obergeschoss", level: 1 }, { id: "eg", name: "Erdgeschoss", level: 0 }, { id: "ke", name: "Keller", level: -1 }],
   rooms: [
