@@ -2,13 +2,14 @@
 
 !!! warning "Beta"
     Heizzentrale ist in Entwicklung. Diese Seite beschreibt den Stand der
-    Version 0.13.
+    Version 0.15.
 
 ## Das gibt es
 
 - Anlage in fünf Schritten beschreiben
 - Hausansicht als Karte und als Seite in der Seitenleiste
 - Raumfenster mit Solltemperatur, Preset, Ein und Aus
+- Temperaturen der Presets je Raum anpassen
 - Zeitpläne, Abwesenheitsregeln, Ofenregeln
 - Räume anordnen, zusätzliche Fühler
 - Spreizung je Strang als Sensor

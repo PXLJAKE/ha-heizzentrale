@@ -120,6 +120,10 @@ const en = {
   room_turn_off: "Switch heating off in this room",
   room_turn_on: "Switch heating on in this room",
   open_thermostat: "Open thermostat details",
+  preset_temps: "Adjust temperatures",
+  preset_temps_hint:
+    "This is how warm the room gets when the mode is chosen, by hand or by a schedule. It applies to this room only and is stored in the thermostat.",
+  preset_save_failed: "Could not save. Is the thermostat reachable?",
   set_mode: "Operating mode",
   set_sources: "Heat sources",
   set_buffers: "Buffer tanks",
@@ -424,6 +428,10 @@ const de: typeof en = {
   room_turn_off: "Heizung in diesem Raum ausschalten",
   room_turn_on: "Heizung in diesem Raum einschalten",
   open_thermostat: "Details zum Thermostat öffnen",
+  preset_temps: "Temperaturen anpassen",
+  preset_temps_hint:
+    "So warm wird der Raum, wenn der Modus gewählt ist, von Hand oder durch einen Zeitplan. Das gilt nur für diesen Raum und wird im Thermostat gespeichert.",
+  preset_save_failed: "Speichern nicht möglich. Ist das Thermostat erreichbar?",
   set_mode: "Betriebsart",
   set_sources: "Wärmeerzeuger",
   set_buffers: "Pufferspeicher",

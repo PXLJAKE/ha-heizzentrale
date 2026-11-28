@@ -787,3 +787,20 @@ async def test_room_without_strand_keeps_the_pump_running(
     freezer.tick(timedelta(minutes=11))
     await control.async_run()
     assert switches[-1] == ("select_option", "select.hk", "0_aus")
+
+
+async def test_preset_number_gives_the_target(hass: HomeAssistant) -> None:
+    """A preset temperature shown by the thermostat wins over a learned one."""
+    hass.states.async_set("climate.bad", "heat", {**ATTRS, "preset_mode": "eco"})
+    entry = _entry(ROOM)
+    await _setup(hass, entry)
+    room_id = next(iter(entry.subentries))
+    control = entry.runtime_data.manager.control
+    room = {"id": room_id, "preset_entities": {"comfort": "number.bad_comfort"}}
+    control.learner.targets[room_id] = {"preset:comfort": 20.0, "preset:eco": 17.0}
+    assert control._action_target(room, "preset:comfort") == 20.0
+    hass.states.async_set("number.bad_comfort", "21.5")
+    assert control._action_target(room, "preset:comfort") == 21.5
+    assert control._action_target(room, "preset:eco") == 17.0
+    hass.states.async_set("number.bad_comfort", "unavailable")
+    assert control._action_target(room, "preset:comfort") == 20.0

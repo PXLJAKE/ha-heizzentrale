@@ -37,9 +37,20 @@ interface Room {
   id: string;
   name: string;
   climate_entity?: string | null;
+  /** Preset of the thermostat -> number entity that holds its temperature. */
+  preset_entities?: Record<string, string>;
   window_entities?: string[];
   circuit?: string | null;
   floor?: string | null;
+}
+
+/** The pop-up in which the preset temperatures of one room are changed. */
+interface PresetEdit {
+  room: string;
+  /** Number entity -> new value; only what was changed. */
+  values: Record<string, number>;
+  saving?: boolean;
+  failed?: boolean;
 }
 
 interface Buffer {
@@ -174,6 +185,7 @@ class HeizzentraleHouseCard extends LitElement {
     _pipes: { state: true },
     _view: { state: true },
     _pendingTarget: { state: true },
+    _presetEdit: { state: true },
     _control: { state: true },
     _edit: { state: true },
     _confirmActive: { state: true },
@@ -192,6 +204,7 @@ class HeizzentraleHouseCard extends LitElement {
   private _view: "house" | "settings" = "house";
   private _pendingTarget?: { entity: string; value: number };
   private _targetTimer?: number;
+  private _presetEdit?: PresetEdit;
   private _control?: Control;
   private _adviceTimer?: number;
   private _confirmActive = false;
@@ -1493,10 +1506,12 @@ class HeizzentraleHouseCard extends LitElement {
     if (!selection || selection.kind !== "room") return nothing;
     const room = plant.rooms.find((item) => item.id === selection.id);
     if (!room?.climate_entity) return nothing;
+    if (this._presetEdit?.room === room.id) return this._renderPresetDialog(room);
     const t = this._t;
     const entity = room.climate_entity;
     const climate = this._state(entity);
     const a = climate?.attributes ?? {};
+    const numbers = room.preset_entities ?? {};
     const available =
       !!climate && climate.state !== "unavailable" && climate.state !== "unknown";
     const off = climate?.state === "off";
@@ -1572,22 +1587,34 @@ class HeizzentraleHouseCard extends LitElement {
               +
             </button>
           </div>
-          ${presets.length
+          ${presets.length || Object.keys(numbers).length
             ? html`<div class="choices">
-                ${presets.map(
-                  (preset) =>
-                    html`<button
-                      class="choice ${a.preset_mode === preset ? "on" : ""}"
-                      ?disabled=${!available || off}
-                      @click=${() =>
-                        this._call("climate", "set_preset_mode", {
-                          entity_id: entity,
-                          preset_mode: preset,
-                        })}
+                ${presets.map((preset) => {
+                  const degrees = this._number(numbers[preset]);
+                  return html`<button
+                    class="choice ${a.preset_mode === preset ? "on" : ""}"
+                    ?disabled=${!available || off}
+                    @click=${() =>
+                      this._call("climate", "set_preset_mode", {
+                        entity_id: entity,
+                        preset_mode: preset,
+                      })}
+                  >
+                    ${this._presetLabel(climate, preset)}${degrees === undefined
+                      ? nothing
+                      : html` <small>${this._format(degrees, "")}°</small>`}
+                  </button>`;
+                })}
+                ${Object.keys(numbers).length
+                  ? html`<button
+                      class="choice gear"
+                      title=${t("preset_temps")}
+                      aria-label=${t("preset_temps")}
+                      @click=${() => (this._presetEdit = { room: room.id, values: {} })}
                     >
-                      ${this._presetLabel(climate, preset)}
-                    </button>`,
-                )}
+                      ${ICON_GEAR}
+                    </button>`
+                  : nothing}
               </div>`
             : nothing}
           ${modes.includes("off") && onMode
@@ -1623,6 +1650,125 @@ class HeizzentraleHouseCard extends LitElement {
           >
             ${t("open_thermostat")}
           </button>
+        </div>
+      </dialog>
+    `;
+  }
+
+  /** Presets that have a temperature, in the order the thermostat lists them. */
+  private _presetRows(room: Room): { preset: string; entity: string }[] {
+    const numbers = room.preset_entities ?? {};
+    const listed = this._state(room.climate_entity)?.attributes.preset_modes;
+    const order: string[] = Array.isArray(listed) ? listed : [];
+    return Object.keys(numbers)
+      .sort((a, b) => {
+        const [ia, ib] = [order.indexOf(a), order.indexOf(b)];
+        return (ia < 0 ? order.length : ia) - (ib < 0 ? order.length : ib);
+      })
+      .map((preset) => ({ preset, entity: numbers[preset] }));
+  }
+
+  /** Write the changed preset temperatures to the numbers of the thermostat. */
+  private async _savePresets(): Promise<void> {
+    const edit = this._presetEdit;
+    if (!edit || edit.saving) return;
+    const changes = Object.entries(edit.values);
+    if (!changes.length) {
+      this._presetEdit = undefined;
+      return;
+    }
+    this._presetEdit = { ...edit, saving: true, failed: false };
+    try {
+      await Promise.all(
+        changes.map(([entity_id, value]) =>
+          this._hass?.callService?.("number", "set_value", { entity_id, value }),
+        ),
+      );
+      this._presetEdit = undefined;
+    } catch {
+      this._presetEdit = { ...edit, saving: false, failed: true };
+    }
+  }
+
+  /** Plus and minus for the temperature behind each preset of a room. */
+  private _renderPresetDialog(room: Room) {
+    const edit = this._presetEdit!;
+    const t = this._t;
+    const climate = this._state(room.climate_entity);
+    const close = () => {
+      if (!edit.saving) this._presetEdit = undefined;
+    };
+    const changed = Object.keys(edit.values).length > 0;
+    return html`
+      <dialog
+        class="backdrop"
+        aria-label=${t("preset_temps")}
+        @click=${close}
+        @cancel=${(event: Event) => {
+          // Back to the room, not out of it.
+          event.preventDefault();
+          close();
+        }}
+      >
+        <div class="sheet" @click=${(event: Event) => event.stopPropagation()}>
+          <div class="sheet-head">
+            <div>
+              <div class="sheet-title">${t("preset_temps")}</div>
+              <div class="sheet-sub">${room.name}</div>
+            </div>
+            <button class="close" aria-label=${t("close")} @click=${close}>✕</button>
+          </div>
+          <div class="preset-rows">
+            ${this._presetRows(room).map(({ preset, entity }) => {
+              const state = this._state(entity);
+              const a = state?.attributes ?? {};
+              const stored = this._number(entity);
+              const step = Number(a.step) > 0 ? Number(a.step) : 0.5;
+              const min = typeof a.min === "number" ? a.min : 5;
+              const max = typeof a.max === "number" ? a.max : 35;
+              const value = edit.values[entity] ?? stored;
+              const label = this._presetLabel(climate, preset);
+              const set = (next: number) => {
+                const rounded = Math.round(Math.min(max, Math.max(min, next)) * 10) / 10;
+                const values = { ...edit.values, [entity]: rounded };
+                if (rounded === stored) delete values[entity];
+                this._presetEdit = { ...edit, values, failed: false };
+              };
+              const fixed = value === undefined || edit.saving;
+              return html`<div class="preset-row ${entity in edit.values ? "changed" : ""}">
+                <span class="preset-name">${label}</span>
+                <button
+                  aria-label="${label} −"
+                  ?disabled=${fixed || value! <= min}
+                  @click=${() => set(value! - step)}
+                >
+                  −
+                </button>
+                <span class="preset-value">${this._format(value, "")}°</span>
+                <button
+                  aria-label="${label} +"
+                  ?disabled=${fixed || value! >= max}
+                  @click=${() => set(value! + step)}
+                >
+                  +
+                </button>
+              </div>`;
+            })}
+          </div>
+          <p class="hint">${t("preset_temps_hint")}</p>
+          ${edit.failed ? html`<p class="hint warn">${t("preset_save_failed")}</p>` : nothing}
+          <div class="sheet-actions">
+            <button class="wide" ?disabled=${edit.saving} @click=${close}>
+              ${t("cancel")}
+            </button>
+            <button
+              class="wide primary"
+              ?disabled=${!changed || edit.saving}
+              @click=${() => this._savePresets()}
+            >
+              ✓ ${t("save")}
+            </button>
+          </div>
         </div>
       </dialog>
     `;
@@ -2625,6 +2771,74 @@ class HeizzentraleHouseCard extends LitElement {
       border-radius: 999px;
       padding: 7px 14px;
       cursor: pointer;
+    }
+    .choice small {
+      font-size: inherit;
+      opacity: 0.65;
+      font-variant-numeric: tabular-nums;
+    }
+    .choice.gear {
+      display: inline-flex;
+      align-items: center;
+      padding: 7px 9px;
+      color: var(--hz-muted);
+    }
+    .choice.gear svg {
+      width: 16px;
+      height: 16px;
+    }
+    .preset-rows {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .preset-row {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      background: var(--hz-soft);
+      border: 1px solid var(--hz-edge);
+      border-radius: 16px;
+      padding: 6px 6px 6px 14px;
+    }
+    .preset-name {
+      flex: 1;
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .preset-value {
+      min-width: 3.6em;
+      text-align: center;
+      font-size: 1.2rem;
+      font-weight: 600;
+      font-variant-numeric: tabular-nums;
+    }
+    .preset-row.changed .preset-value {
+      color: var(--primary-color);
+    }
+    .preset-row button {
+      font: inherit;
+      font-size: 1.4rem;
+      line-height: 1;
+      width: 44px;
+      height: 44px;
+      border-radius: 12px;
+      border: 0;
+      cursor: pointer;
+      color: var(--primary-text-color);
+      background: color-mix(in srgb, var(--primary-text-color) 9%, transparent);
+    }
+    .sheet-actions {
+      display: flex;
+      gap: 8px;
+    }
+    .sheet > .hint {
+      margin: 0;
+    }
+    .sheet > .hint.warn {
+      color: var(--error-color, #db4437);
     }
     .choice.on {
       background: var(--primary-color);

@@ -585,9 +585,21 @@ class ControlEngine:
                 del self._applied_at[room_id]
         return changed
 
-    def _action_target(self, room_id: str, action: str) -> float | None:
+    def _action_target(self, room: dict[str, Any], action: str) -> float | None:
         """Setpoint an action leads to in °C, if known."""
-        target = self.learner.target_for(room_id, action)
+        if action.startswith(PREFIX_PRESET):
+            # A thermostat that shows the temperature of a preset is believed
+            # before anything that was learned by watching it.
+            numbers = room.get("preset_entities") or {}
+            state = self.hass.states.get(
+                numbers.get(action.removeprefix(PREFIX_PRESET), "")
+            )
+            if state is not None:
+                try:
+                    return self._celsius(float(state.state))
+                except ValueError:
+                    pass
+        target = self.learner.target_for(room["id"], action)
         if action.startswith(PREFIX_TEMPERATURE):
             # Written by the user in the unit of the system.
             return self._celsius(target)
@@ -631,11 +643,11 @@ class ControlEngine:
         self._preheating.pop(room_id, None)
         if wait > self.preheat["max_min"]:
             return desired
-        target = self._action_target(room_id, action)
+        target = self._action_target(room, action)
         if target is None:
             return desired
         if desired.action != ACTION_OFF:
-            current_target = self._action_target(room_id, desired.action)
+            current_target = self._action_target(room, desired.action)
             if current_target is None:
                 current_target = reading.target
             if current_target is None or target <= current_target + CLOSE_ENOUGH:

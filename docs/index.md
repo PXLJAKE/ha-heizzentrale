@@ -22,7 +22,8 @@ anlegst, ganz ohne eigene Automationen.
   Pumpengruppe und Strängen.
 - **Erklärungen**: ein Klick auf ein Teil sagt in einfachen Worten, was dort
   gerade passiert und warum.
-- **Raumfenster**: Solltemperatur, Preset und Ein/Aus direkt am Raum.
+- **Raumfenster**: Solltemperatur, Preset und Ein/Aus direkt am Raum,
+  dazu die Temperaturen für Komfort, Eco und Schlafen je Raum.
 - **Zeitpläne** für einzelne Räume oder ganze Stockwerke.
 - **Abwesenheit**: Räume absenken, wenn bestimmte Personen oder Handys weg
   sind.
