@@ -7,6 +7,7 @@ API causes no extra traffic while the card is open.
 
 from __future__ import annotations
 
+import re
 from typing import Any
 
 import voluptuous as vol
@@ -76,6 +77,39 @@ def async_register_websocket_api(hass: HomeAssistant) -> None:
     websocket_api.async_register_command(hass, ws_control_get)
     websocket_api.async_register_command(hass, ws_control_save)
     websocket_api.async_register_command(hass, ws_layout_save)
+
+
+# "preset_eco" as Better Thermostat names it, "comfort_temperature" as many
+# Zigbee thermostats do.
+_PRESET_IDS = (
+    re.compile(r"(?:^|_)preset_([a-z0-9_]+)$"),
+    re.compile(
+        r"(?:^|_)(eco|comfort|away|sleep|home|holiday)_temperature(?:_zigbee2mqtt)?$"
+    ),
+)
+
+
+@callback
+def preset_numbers(registry: er.EntityRegistry, climate: str | None) -> dict[str, str]:
+    """Numbers of the thermostat's device that hold a preset temperature.
+
+    Better Thermostat and similar thermostats offer one number per preset,
+    for example "preset_eco". The key is the preset as the thermostat names
+    it, the value the number entity. Other thermostats give an empty result.
+    """
+    item = registry.async_get(climate) if climate else None
+    if item is None or not item.device_id:
+        return {}
+    found: dict[str, str] = {}
+    for other in er.async_entries_for_device(registry, item.device_id):
+        if other.domain != Platform.NUMBER or other.platform != item.platform:
+            continue
+        for text in (other.translation_key or "", other.unique_id):
+            match = next((m for p in _PRESET_IDS if (m := p.search(text))), None)
+            if match:
+                found.setdefault(match.group(1), other.entity_id)
+                break
+    return found
 
 
 def as_list(value: Any) -> list[str]:
@@ -197,6 +231,9 @@ def async_describe_plants(hass: HomeAssistant) -> list[dict[str, Any]]:
                     base
                     | {
                         "climate_entity": data.get(CONF_CLIMATE),
+                        "preset_entities": preset_numbers(
+                            registry, data.get(CONF_CLIMATE)
+                        ),
                         "window_entities": as_list(data.get(CONF_WINDOW)),
                         "circuit": data.get(CONF_CIRCUIT),
                         "floor": floor_id,

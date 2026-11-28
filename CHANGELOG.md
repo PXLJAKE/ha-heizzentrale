@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.15.0-beta.1
+
+- Room window: the presets show their temperature, and a small gear opens a
+  pop-up to change the temperature of each preset (comfort, eco, sleep,
+  away) for this room with plus and minus. Nothing is written before
+  "Save". Available for thermostats that offer these temperatures as number
+  entities, such as Better Thermostat.
+- Preheating uses these preset temperatures directly instead of first
+  learning them by watching the thermostat.
+
 ## 0.14.0-beta.1
 
 - Pump group: optional target flow temperature. It is shown on the tile

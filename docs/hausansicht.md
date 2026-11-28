@@ -39,6 +39,24 @@ Heizung im Raum aus. Das wirkt direkt auf das Thermostat, so als würdest du
 es in Home Assistant bedienen. Unter **Plan** steht, was Zeitplan,
 Abwesenheit oder Ofen für diesen Raum gerade vorsehen.
 
+### Temperaturen für Komfort, Eco und Schlafen
+
+Auf den Presets steht, wie warm sie den Raum machen. Das kleine Zahnrad
+daneben öffnet ein Fenster, in dem du diese Temperaturen für den Raum
+änderst:
+
+![Temperaturen der Presets anpassen](assets/raum-temperaturen.webp){ loading=lazy }
+
+Mit Plus und Minus stellst du jede Temperatur ein, geänderte Werte sind
+farbig. Erst **Speichern** schreibt sie in das Thermostat, **Abbrechen**
+lässt alles, wie es war. Die Werte gelten nur für diesen Raum. Ein Zeitplan,
+der „Komfort“ stellt, bringt den Raum danach auf die neue Temperatur.
+
+Das Zahnrad erscheint nur, wenn das Thermostat die Temperaturen seiner
+Presets als einstellbare Zahlen anbietet. Better Thermostat tut das. Bei
+anderen Thermostaten stellst du die Presets weiter dort ein, wo du es bisher
+getan hast.
+
 ## Haus anordnen
 
 Der Stift oben rechts startet den Bearbeitungsmodus.

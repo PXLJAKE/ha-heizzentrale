@@ -56,7 +56,16 @@ const states = {
 };
 const c = (id, name, system) => ({ id, name, system_type: system, flow_entity: `sensor.${id}_vl`, return_entity: `sensor.${id}_rl`,
   valve_entity: `switch.${id}`, valve_type: "nc", pump_group: "pg", spread_entity: `sensor.${id}_spread`, open_entity: `binary_sensor.${id}_open` });
-const r = (id, name, climate, circuit, floor, win) => ({ id, name, climate_entity: climate, circuit, floor, window_entities: win ? [win] : [] });
+const PRESET_TEMPS = { comfort: 22, eco: 19, sleep: 18, away: 15 };
+const r = (id, name, climate, circuit, floor, win) => {
+  const preset_entities = {};
+  for (const [preset, value] of Object.entries(PRESET_TEMPS)) {
+    const number = `number.${climate.split(".")[1]}_preset_${preset}`;
+    preset_entities[preset] = number;
+    states[number] = { state: String(value), attributes: { unit_of_measurement: "°C", min: 5, max: 30, step: 0.5 } };
+  }
+  return { id, name, climate_entity: climate, preset_entities, circuit, floor, window_entities: win ? [win] : [] };
+};
 const plant = { entry_id: "demo", name: "Heizung", mode_entity: "select.mode", outdoor_entity: "sensor.outside",
   heat_sources: [{ id: "k", name: "Pellematic", kind: "pellet", temperature_entity: "sensor.boiler", status_entity: "sensor.boiler_state" }],
   buffers: [{ id: "p", name: "Puffer", sensor_entities: ["sensor.buf_top", "sensor.buf_mid", "sensor.buf_bottom"], volume: 550, mean_entity: "sensor.buf_mean" }],
@@ -133,6 +142,7 @@ const hass = () => ({ states: { ...states }, language: q.get("lang") || "de", ca
     if (service === "set_temperature") states[data.entity_id] = { ...old, attributes: { ...old.attributes, temperature: data.temperature } };
     if (service === "set_preset_mode") states[data.entity_id] = { ...old, attributes: { ...old.attributes, preset_mode: data.preset_mode } };
     if (service === "set_hvac_mode") states[data.entity_id] = { ...old, state: data.hvac_mode };
+    if (service === "set_value") states[data.entity_id] = { ...old, state: String(data.value) };
     if (service === "select_option") states[data.entity_id] = { ...old, state: data.option };
     card.hass = hass();
   } });
@@ -149,6 +159,8 @@ if (q.get("edit")) setTimeout(() => {
 if (q.get("active")) { states["select.mode"].state = "active"; control.switching = true; control.switched = { dg: "close", saal: "close" }; }
 if (q.get("would")) { control.advice.circuits.og = { wanted: false, reason: "no_demand", action: "close", rooms: [] }; control.advice.circuits.dg = { wanted: true, reason: "rooms_calling", action: "open", rooms: ["Bad"] }; }
 if (q.get("arrange")) setTimeout(() => { (card.shadowRoot ? card : document.querySelector("heizzentrale-house-card"))._edit = true; }, 300);
+// ?presets=r2 opens the pop-up with the preset temperatures of that room.
+if (q.get("presets")) setTimeout(() => { card._select({ kind: "room", id: q.get("presets") }); card._presetEdit = { room: q.get("presets"), values: q.get("changed") ? { [plant.rooms.find((x) => x.id === q.get("presets")).preset_entities.comfort]: 21.5 } : {} }; }, 300);
 const pick = q.get("select");
 if (pick) setTimeout(() => { const [kind, id] = pick.split(":"); card._select({ kind, id }); }, 300);
 </script>

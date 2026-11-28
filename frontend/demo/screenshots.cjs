@@ -12,6 +12,8 @@ const { chromium } = require("playwright");
     ["hausansicht-handy", { width: 390, height: 844 }, ""],
     ["raum-angeklickt", { width: 1024, height: 900 }, "?select=room:r4"],
     ["raum-angeklickt-handy", { width: 390, height: 844 }, "?select=room:r9"],
+    ["raum-temperaturen", { width: 1024, height: 900 }, "?presets=r2&changed=1"],
+    ["raum-temperaturen-handy", { width: 390, height: 844 }, "?presets=r2&theme=dark"],
     ["einrichtung-leer", { width: 390, height: 844 }, "?empty=1"],
     ["einrichtung-unterwegs", { width: 1024, height: 900 }, "?view=settings&partial=1"],
     ["einstellungen", { width: 1024, height: 900 }, "?view=settings"],

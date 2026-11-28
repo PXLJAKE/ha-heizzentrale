@@ -23,7 +23,8 @@ stove rules right in the view, without writing automations.
   storey per floor of Home Assistant, a tile per room, the plant room with
   heat source, buffer, pump group and circuits, and animated pipes.
 - **Plain explanations**: click any part to read what is happening and why.
-- **Room window**: target temperature, preset, on and off.
+- **Room window**: target temperature, preset, on and off, and the
+  temperature behind each preset per room.
 - **Schedules** for single rooms or whole floors.
 - **Absence rules**: turn rooms down while chosen people or phones are away.
 - **Stoves**: turn rooms down while a wood stove burns.

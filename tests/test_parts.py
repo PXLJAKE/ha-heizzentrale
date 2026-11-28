@@ -497,3 +497,76 @@ async def test_layout_orders_rooms_and_moves_floors(
     await client.send_json_auto_id({"type": "heizzentrale/plants"})
     plant = (await client.receive_json())["result"]["plants"][0]
     assert [room["name"] for room in plant["rooms"]] == ["c", "a", "b"]
+
+
+async def test_preset_numbers_of_the_thermostat(
+    hass: HomeAssistant, hass_ws_client: WebSocketGenerator
+) -> None:
+    """Numbers that hold a preset temperature are found through the device."""
+    from homeassistant.helpers import device_registry as dr
+    from homeassistant.helpers import entity_registry as er
+
+    other = MockConfigEntry(domain="better_thermostat")
+    other.add_to_hass(hass)
+    device = dr.async_get(hass).async_get_or_create(
+        config_entry_id=other.entry_id, identifiers={("better_thermostat", "bad")}
+    )
+    registry = er.async_get(hass)
+
+    def add(domain: str, platform: str, unique_id: str, **kwargs: Any) -> str:
+        return registry.async_get_or_create(
+            domain, platform, unique_id, device_id=device.id, **kwargs
+        ).entity_id
+
+    climate = add("climate", "better_thermostat", "bad")
+    eco = add("number", "better_thermostat", "bad_preset_eco")
+    comfort = add(
+        "number", "better_thermostat", "bad_comfort", translation_key="preset_comfort"
+    )
+    # Not a preset, and a number of another integration on the same device.
+    add("number", "better_thermostat", "bad_tolerance")
+    add("number", "other", "bad_preset_sleep")
+    add("sensor", "better_thermostat", "bad_preset_away")
+
+    entry = _entry(
+        {"type": "room", "data": {CONF_NAME: "Bad", "climate_entity": climate}},
+        {"type": "room", "data": {CONF_NAME: "Flur", "climate_entity": "climate.x"}},
+    )
+    await _setup(hass, entry)
+    client = await hass_ws_client(hass)
+    await client.send_json_auto_id({"type": "heizzentrale/plants"})
+    rooms = {
+        room["name"]: room
+        for room in (await client.receive_json())["result"]["plants"][0]["rooms"]
+    }
+    assert rooms["Bad"]["preset_entities"] == {"eco": eco, "comfort": comfort}
+    assert rooms["Flur"]["preset_entities"] == {}
+
+
+async def test_preset_numbers_named_like_zigbee(hass: HomeAssistant) -> None:
+    """Thermostats that call it "comfort_temperature" are understood too."""
+    from homeassistant.helpers import device_registry as dr
+    from homeassistant.helpers import entity_registry as er
+
+    from custom_components.heizzentrale.websocket_api import preset_numbers
+
+    other = MockConfigEntry(domain="mqtt")
+    other.add_to_hass(hass)
+    device = dr.async_get(hass).async_get_or_create(
+        config_entry_id=other.entry_id, identifiers={("mqtt", "trv")}
+    )
+    registry = er.async_get(hass)
+    climate = registry.async_get_or_create(
+        "climate", "mqtt", "0x01_climate_zigbee2mqtt", device_id=device.id
+    )
+    comfort = registry.async_get_or_create(
+        "number", "mqtt", "0x01_comfort_temperature_zigbee2mqtt", device_id=device.id
+    )
+    registry.async_get_or_create(
+        "number",
+        "mqtt",
+        "0x01_local_temperature_calibration_zigbee2mqtt",
+        device_id=device.id,
+    )
+    assert preset_numbers(registry, climate.entity_id) == {"comfort": comfort.entity_id}
+    assert preset_numbers(registry, None) == {}
